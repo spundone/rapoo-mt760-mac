@@ -71,7 +71,9 @@ final class MouseStore {
         do {
             info = try await driver.readInfo()
             settings = try await driver.readSettings()
+            let firstConnect = phase != .connected
             phase = .connected
+            if firstConnect { applyLaunchFirmwareButtonIfRequested() }
         } catch {
             phase = .failed(error.localizedDescription)
             scheduleRetry()
@@ -228,6 +230,30 @@ final class MouseStore {
                 settings.currentStage = s
             }
         }
+    }
+
+    /// Changes what a top/bottom button does inside the mouse, then confirms by reading back.
+    func setFirmwareButton(key: Int, to action: TelinkCodec.FirmwareAction) {
+        guard let d = driver as? TelinkDriver else { return }
+        Task {
+            busy = true
+            defer { busy = false }
+            do {
+                let map = try await d.setFirmwareButton(key: key, to: action)
+                settings.firmwareButtons = map
+                toast = map[key] == action.title ? "\(action.title) saved to the mouse" : "The mouse didn't keep that change"
+            } catch {
+                toast = "Couldn't change the button: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Developer aid: MTC_FIRMWARE_BUTTON="4:dpiCycleUp" applies once after connecting.
+    func applyLaunchFirmwareButtonIfRequested() {
+        guard let spec = ProcessInfo.processInfo.environment["MTC_FIRMWARE_BUTTON"],
+              let colon = spec.firstIndex(of: ":"), let key = Int(spec[..<colon]),
+              let action = TelinkCodec.FirmwareAction(rawValue: String(spec[spec.index(after: colon)...])) else { return }
+        setFirmwareButton(key: key, to: action)
     }
 
     /// Re-reads battery quietly; returns the new level.

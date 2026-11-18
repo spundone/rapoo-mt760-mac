@@ -254,3 +254,6 @@ This settles the conflict in section 0: chip type 7 *is* used, with report ID `0
   02 right, 04 middle, 08 back, 10 forward. Type 08 codes: 03 cycle+, 04 cycle−, 05 DPI+, 06 DPI−.
 - A 20-byte memory read at 0x618 never completed (busy forever), while 8- and 24-byte reads work.
   Read 24 bytes and ignore the extra.
+- **Button write (verified):** write 4 @ 0x600 + 4 × key. Top button (key 4) `03 00 04 00` → `08 00 03 00`
+  (DPI cycle +). The read-back changed only that slot. The app only lets keys 3 (bottom) and 4 (top) be
+  changed, so left click can't be lost.

@@ -77,3 +77,10 @@ import Testing
     #expect(m[5] == "Forward" && m[6] == "Back")
     #expect(m[7] == "Scroll left" && m[10] == "Scroll down")
 }
+
+@Test func topButtonDPICycleUpPacket() {
+    #expect(TelinkCodec.setButtonSlot(key: 4, TelinkCodec.FirmwareAction.dpiCycleUp.slot)
+            == [0xBA, 0xA5, 0xA5, 0x04, 0x10, 0x06, 0x00, 0x00, 0x08, 0x00, 0x03, 0x00])
+    #expect(TelinkCodec.setButtonSlot(key: 0, TelinkCodec.FirmwareAction.dpiCycleUp.slot) == nil)  // left is protected
+    #expect(TelinkCodec.FirmwareAction.dpiCycleUp.title == "DPI cycle +")
+}

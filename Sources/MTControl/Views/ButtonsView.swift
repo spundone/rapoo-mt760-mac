@@ -299,6 +299,7 @@ func diagramLabels(store: MouseStore, host: HostController, app: String?) -> [In
 /// A button whose job is set inside the mouse. If it sends a mouse button, the Mac-side
 /// action for that button applies to it too.
 struct FirmwareButtonNote: View {
+    @Environment(MouseStore.self) private var store
     let part: MousePart
     let firmware: String?
 
@@ -306,8 +307,18 @@ struct FirmwareButtonNote: View {
         HStack(alignment: .firstTextBaseline) {
             Text(part.name).foregroundStyle(.secondary)
             Spacer()
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(firmware ?? "—")
+            VStack(alignment: .trailing, spacing: 3) {
+                Menu {
+                    ForEach(TelinkCodec.FirmwareAction.allCases) { a in
+                        Button(a.title) { store.setFirmwareButton(key: part.rawValue, to: a) }
+                    }
+                } label: {
+                    Text(firmware ?? "—")
+                }
+                .menuStyle(.button)
+                .buttonStyle(.glass)
+                .fixedSize()
+                .disabled(store.phase != .connected || store.busy)
                 Text(note).font(.caption2).foregroundStyle(.tertiary)
             }
         }
@@ -318,7 +329,7 @@ struct FirmwareButtonNote: View {
         switch firmware {
         case "Middle click": "Sends a middle click, so the Wheel click action applies"
         case "Back", "Forward": "Sends \(firmware!), so that action applies"
-        default: "Set inside the mouse"
+        default: "Saved in the mouse"
         }
     }
 }

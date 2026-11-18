@@ -168,6 +168,33 @@ enum TelinkCodec {
         return out
     }
 
+    /// Firmware actions offered for buttons that the Mac can't see on their own.
+    enum FirmwareAction: String, CaseIterable, Identifiable, Sendable {
+        case middleClick, back, forward, dpiCycleUp, dpiCycleDown, dpiUp, dpiDown
+
+        var id: String { rawValue }
+        var slot: [UInt8] {
+            switch self {
+            case .middleClick: [0x03, 0x00, 0x04, 0x00]
+            case .back: [0x03, 0x00, 0x08, 0x00]
+            case .forward: [0x03, 0x00, 0x10, 0x00]
+            case .dpiCycleUp: [0x08, 0x00, 0x03, 0x00]
+            case .dpiCycleDown: [0x08, 0x00, 0x04, 0x00]
+            case .dpiUp: [0x08, 0x00, 0x05, 0x00]
+            case .dpiDown: [0x08, 0x00, 0x06, 0x00]
+            }
+        }
+        var title: String { TelinkCodec.describeButtonSlot(slot[...]) }
+    }
+
+    /// Keys whose firmware action the app may change. Left/right/wheel stay untouched.
+    static let editableFirmwareKeys: Set<Int> = [3, 4]
+
+    static func setButtonSlot(key: Int, _ slot: [UInt8]) -> [UInt8]? {
+        guard editableFirmwareKeys.contains(key), slot.count == 4 else { return nil }
+        return writeMemory(buttonMapAddress + UInt32(4 * key), slot)
+    }
+
     static let rateCodes: [UInt8: PollingRate] = [0x08: .hz125, 0x04: .hz250, 0x02: .hz500, 0x01: .hz1000]
 
     /// data[0] = wired rate, data[1] = wireless rate.
@@ -341,6 +368,13 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
         try await restoreBluetoothStageIfNeeded()
         let old = Array(TelinkCodec.memory(try await transact(.dpiStage)).prefix(4))
         _ = try await transact(TelinkCodec.setDPIStage(stage, previous: old), label: "setDPIStage(\(stage))")
+    }
+
+    /// Writes one button slot and returns the button map read back afterwards.
+    func setFirmwareButton(key: Int, to action: TelinkCodec.FirmwareAction) async throws -> [Int: String] {
+        guard let packet = TelinkCodec.setButtonSlot(key: key, action.slot) else { throw DriverError.notSupportedYet("Changing that button") }
+        _ = try await transact(packet, label: "setButton(\(key)) \(action.rawValue)")
+        return try await readSettings().firmwareButtons
     }
 
     /// Quiet battery read for periodic polling.
