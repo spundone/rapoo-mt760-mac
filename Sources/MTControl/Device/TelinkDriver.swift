@@ -19,6 +19,17 @@ enum TelinkCodec {
          UInt8(address & 0xFF), UInt8((address >> 8) & 0xFF), UInt8((address >> 16) & 0xFF), UInt8(address >> 24)]
     }
 
+    /// Minimum reply length for a request: memory reads need status + 3 + len bytes.
+    static func expectedLength(_ req: [UInt8]) -> Int {
+        guard req.count >= 3 else { return 1 }
+        switch req[2] {
+        case 0xA4 where req.count >= 4: return 4 + Int(req[3])
+        case 0xA3: return 5
+        case 0xAA: return 3
+        default: return 1
+        }
+    }
+
     static func writeMemory(_ address: UInt32, _ data: [UInt8]) -> [UInt8] {
         [reportID, route, 0xA5, UInt8(data.count),
          UInt8(address & 0xFF), UInt8((address >> 8) & 0xFF), UInt8((address >> 16) & 0xFF), UInt8(address >> 24)] + data
@@ -117,12 +128,14 @@ enum DriverError: LocalizedError {
     case notSupportedYet(String)
     case busy
     case badStatus(UInt8)
+    case unreadable(String)
 
     var errorDescription: String? {
         switch self {
         case .notSupportedYet(let what): "\(what) isn't supported yet."
         case .busy: "The mouse stayed busy. Move it to wake it up, then refresh."
         case .badStatus(let s): String(format: "The mouse answered with status 0x%02X.", s)
+        case .unreadable(let what): "Couldn't make sense of the \(what) the mouse sent. Try Refresh."
         }
     }
 }
@@ -148,11 +161,12 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
     }
 
     private func transact(_ cmd: ReadCommand, quiet: Bool = false) async throws -> [UInt8] {
-        try await transact(TelinkCodec.request(cmd), label: cmd.rawValue, quiet: quiet)
+        let req = TelinkCodec.request(cmd)
+        return try await transact(req, label: cmd.rawValue, quiet: quiet, minLength: TelinkCodec.expectedLength(req))
     }
 
     /// Sends one packet and returns the response without the report ID (r[0] = status).
-    private func transact(_ bytes: [UInt8], label: String, quiet: Bool = false) async throws -> [UInt8] {
+    private func transact(_ bytes: [UInt8], label: String, quiet: Bool = false, minLength: Int = 1) async throws -> [UInt8] {
         try ensureOpen()
         var packet = bytes
         packet += [UInt8](repeating: 0, count: KnownDevice.configReportLength - packet.count)
@@ -166,9 +180,12 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
             reply = nil
         }
         // Busy, or no interrupt report: poll GET_REPORT(Input) like the vendor app does.
+        // Right after a change the mouse can answer with a bare status byte; treat short
+        // replies like "busy" and ask again.
+        func notReady(_ r: [UInt8]?) -> Bool { r == nil || r!.first == 0x02 || (r!.first == 0x01 && r!.count < minLength) }
         var r = reply.map(normalize)
         var attempts = 0
-        while r == nil || r!.first == 0x02 {
+        while notReady(r) {
             attempts += 1
             guard attempts <= 100 else {
                 HIDLog.write("← \(label): busy/no reply")
@@ -193,7 +210,7 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
 
     func readInfo() async throws -> DeviceInfo {
         var info = DeviceInfo(name: "MT760", firmware: "—", connection: kind, batteryPercent: nil, charging: false)
-        if let fw = TelinkCodec.parseFirmware(try await transact(.firmware)) { info.firmware = fw }
+        if let fw = TelinkCodec.parseFirmware(try await transact(.firmware)) { info.firmware = fw }  // firmware is cosmetic
         if let b = TelinkCodec.parseBattery(try await transact(.battery)) {
             info.batteryPercent = b.percent
             info.charging = b.charging
@@ -203,14 +220,14 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
 
     func readSettings() async throws -> MouseSettings {
         var s = MouseSettings.factory
-        if let d = TelinkCodec.parseDPI(try await transact(.dpi)) {
-            s.dpiLevels = d.levels
-            s.enabledStages = d.enabled
-            s.currentStage = d.current
+        guard let d = TelinkCodec.parseDPI(try await transact(.dpi)) else { throw DriverError.unreadable("DPI table") }
+        s.dpiLevels = d.levels
+        s.enabledStages = d.enabled
+        s.currentStage = d.current
+        guard let p = TelinkCodec.parsePollingRate(try await transact(.pollingRate), wireless: kind != .usb) else {
+            throw DriverError.unreadable("polling rate")
         }
-        if let p = TelinkCodec.parsePollingRate(try await transact(.pollingRate), wireless: kind != .usb) {
-            s.pollingRate = p
-        }
+        s.pollingRate = p
         return s
     }
 

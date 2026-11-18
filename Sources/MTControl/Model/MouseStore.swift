@@ -107,7 +107,7 @@ final class MouseStore {
             do {
                 try await driver.setCurrentStage(stage)
                 // Read back so the UI shows what the mouse actually did.
-                settings = try await driver.readSettings()
+                if let fresh = try? await driver.readSettings() { settings = fresh }
                 toast = settings.currentStage == stage
                     ? "\(settings.dpiLevels[stage]) DPI"
                     : "The mouse didn't switch stage"

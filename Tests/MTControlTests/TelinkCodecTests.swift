@@ -39,3 +39,9 @@ import Testing
     #expect(TelinkCodec.setDPIStage(3, previous: [0x06, 0x00, 0x03, 0x02])
             == [0xBA, 0xA5, 0xA5, 0x04, 0x48, 0x06, 0x00, 0x00, 0x03, 0x00, 0x03, 0x02])
 }
+
+@Test func expectedReplyLengths() {
+    #expect(TelinkCodec.expectedLength(TelinkCodec.request(.dpi)) == 28)
+    #expect(TelinkCodec.expectedLength(TelinkCodec.request(.pollingRate)) == 12)
+    #expect(TelinkCodec.expectedLength(TelinkCodec.request(.battery)) == 3)
+}
