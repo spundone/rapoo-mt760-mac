@@ -214,3 +214,23 @@ of ChipType in the device tuple.
 
 MouseForTelink address table (ctor 0x221000) **[C]**:
 `600 604 608 60C 610 614 618 61C 620 624 628 630 634 638 646 648 64C 65A 65C 34 23 1000 11000`.
+
+## 6. Verified on hardware (MT760L via receiver 24AE:1870, 19 Nov 2026)
+
+This settles the conflict in section 0: chip type 7 *is* used, with report ID `0xBA`.
+
+- The config channel is vendor collection `0xFF00/0x0E`, report ID **0xBA** (31 bytes in and
+  out). It sits inside the receiver's **keyboard** interface (page 0x01, usage 0x06), not in
+  the `0xFF01` interface (report 6), which never answers. Opening it needs Input Monitoring.
+- Requests: Output report `BA A5 cmd …`, padded to 32 bytes.
+- Replies: interrupt reports never arrive. GET_REPORT(Input, 0xBA) returns the reply
+  **without** the report ID, so r[0] is the status byte (01 = OK).
+- Captured replies:
+  - `A3` firmware: `01 04 04 01 00` = 0.1.4.4 (matches A HUB's version.json)
+  - `AA` battery: `01 01 63` = charging, 99%
+  - read 24 @ 0x638: `01 00 00 00 | 10 00 14 00 18 00 20 00 30 00 40 00 50 00 06 ff 02 00 03 02 10 00 14 00`.
+    That is 800/1000/1200/1600/2400/3200/4000 DPI, 7 stages, and data[16] = 02 = current
+    stage index (A HUB logged "dpiLevel: 3").
+  - read 8 @ 0x65C: `01 00 00 00 | 00 ff ff ff …`. data[0] = 00 does **not** match the current stage; meaning unknown.
+  - read 8 @ 0x630: `01 00 00 00 | 01 01 ff ff …` = 1000 Hz wired and wireless.
+- Writes have not been tried yet.
