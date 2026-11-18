@@ -241,3 +241,9 @@ This settles the conflict in section 0: chip type 7 *is* used, with report ID `0
 - Writes: memory write `BA A5 A5 len addr32 data` is acknowledged with status `01`.
   Writing `03` to 0x65C read back `04`, and later writes there didn't change it, so its
   behaviour is unexplained. Stage writes now target 0x648 (`[stage, old1, old2, old3]`).
+- **Writes verified on hardware (19 Nov 2026):**
+  - DPI stage: write 4 @ 0x648 `[stage, old1, old2, old3]`. Read-back matches and the pointer speed changes.
+  - DPI table: write 20 @ 0x638, keeping bytes 15–19 as read. Example: stage 4 1600 → 1800
+    sent `… 18 00 24 00 30 00 …` and read back identical. The second table at 0x64C was not touched.
+  - Polling: write 4 @ 0x630 `[code, code, old2, old3]`. `08 08` (125 Hz) and `01 01` (1000 Hz) both read back.
+  - After a write the mouse can briefly answer memory reads with a bare `01`. Retry until the full reply arrives.
