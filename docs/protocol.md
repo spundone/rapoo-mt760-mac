@@ -1,33 +1,31 @@
-# Rapoo MT760(L) configuration protocol (A HUB, static analysis)
+# Rapoo MT760(L) configuration protocol
 
-Status: first pass, written from static analysis of `libRapooDevice.dylib`
-(A HUB 1.1.0, x86_64, sha256 `04778a3c…fadc`). Nothing was sent to the mouse.
-Addresses below are in that dylib. Tags: **[C]** = confirmed from code,
-**[I]** = inferred, **[L]** = observed live (from the coordinator's descriptor dump).
+Developer notes. For a plain-English overview, see [how-it-works.md](how-it-works.md).
 
-## 0. One open conflict (check this first)
+These notes come from two sources:
+1. Static analysis of Rapoo's A HUB 1.1.0 (`libRapooDevice.dylib`, x86_64), with addresses into that library.
+2. Testing on a real MT760L through its 2.4 GHz receiver. **Section 6 has what was verified on hardware and overrides anything earlier that disagrees.**
 
-**[C]** `BaseProtocol::BaseProtocol` (0x271a0) picks the first packet byte (the HID
-report ID) and the read length from `ChipType`:
+Tags: **[C]** = read from A HUB's code, **[I]** = inferred, **[L]** = seen on the device.
 
-| ChipType | first byte (report ID) | read length (`this+0x61`) |
-|---|---|---|
-| 3, 6, 11, 15, 17, 0xBB | `0x06` | `0x21` (33) |
-| 8 | `0x06` | `0x40` |
-| 0x12 | `0x04` | `0x40` |
-| 0x0C | `0x55` | `0x40` |
-| anything else, **including 7** | `0xBA` | `0x20` (32) |
-| BLE + "AIKeyboard" | `0x08` | |
+## 0. Summary (verified)
 
-**[L]** The 2.4G dongle (24AE:1870) has one vendor collection (usage page 0xFF01,
-usage 0x00) with **report ID 6, 28 data bytes (29 with the ID)** for Input, Output
-and Feature. No report 0xBA exists.
+| | |
+|---|---|
+| Receiver | USB `24AE:1870` ("Rapoo Gaming Device") |
+| Channel | vendor report **0xBA** (31 bytes in/out) inside the receiver's **keyboard** interface (usage page 0x01, usage 0x06). Opening it needs Input Monitoring on macOS. |
+| Request | Output report `BA A5 <cmd> <payload…>`, padded to 32 bytes. `A5` = pass through the receiver to the mouse. |
+| Reply | GET_REPORT(Input, 0xBA). It comes back **without** the report ID, so byte 0 is the status: `01` OK, `02` busy (ask again). |
+| Firmware version | `BA A5 A3` → `01 a b c d` = d.c.b.a |
+| Battery | `BA A5 AA` → `01 charging percent` |
+| Read memory | `BA A5 A4 len addr32le` → `01 xx xx xx data…`. Use 8- or 24-byte reads; a 20-byte read at 0x618 never finished. |
+| Write memory | `BA A5 A5 len addr32le data…` → `01` |
+| 0x600 | button map, 4 bytes per key (section 6) |
+| 0x630 | polling rate: `wired wireless`, codes `08` 125 Hz, `04` 250, `02` 500, `01` 1000 |
+| 0x638 | DPI table: 7 × u16 LE (×50 DPI), stage count − 1, `ff`, **live stage index at 0x648**, 3 more bytes |
+| 0x64C | second DPI table (Bluetooth copy), its stage byte at 0x65C |
 
-So at runtime the protocol object for this mouse must run with a ChipType in the
-report-6 group (3/6/11/15/17), not the `chipType: 7` in `Factory Config.json`.
-That 7 is probably the GUI's own enum. I could not yet trace which tuple field
-becomes `ChipType` (see section 2). **Use report ID 6.** Every packet below writes
-the report-ID byte as `RID`. Use `RID = 0x06` on the dongle.
+A HUB also has a separate 0x06-report path for other chip types. It isn't used by the MT760 on this receiver: the `0xFF01` interface with report 6 never answers.
 
 ## 1. Device class
 

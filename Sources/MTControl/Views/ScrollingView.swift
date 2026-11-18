@@ -39,6 +39,20 @@ struct GeneralPanel: View {
             Toggle("Warn when the battery is low", isOn: $host.settings.lowBatteryAlerts)
             Toggle("Show battery in the menu bar", isOn: $host.settings.batteryInMenuBar)
             Toggle("Open at login", isOn: Binding(get: { host.launchAtLogin }, set: { host.launchAtLogin = $0 }))
+            HStack {
+                Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Link("Check for updates", destination: AppLinks.latestRelease)
+                Link("Help", destination: AppLinks.howItWorks)
+            }
+            .font(.callout)
         }
     }
+}
+
+enum AppLinks {
+    static let repo = URL(string: "https://github.com/spundone/rapoo-mt760-mac")!
+    static let latestRelease = URL(string: "https://github.com/spundone/rapoo-mt760-mac/releases/latest")!
+    static let howItWorks = URL(string: "https://github.com/spundone/rapoo-mt760-mac/blob/main/docs/how-it-works.md")!
 }
