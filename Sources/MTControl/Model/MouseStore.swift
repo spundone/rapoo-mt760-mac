@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AppKit
 
 @MainActor
 @Observable
@@ -147,6 +148,18 @@ final class MouseStore {
                 toast = "Snapshot \(n) saved to the log"
             } catch {
                 toast = "Snapshot failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Keeps the stage in sync with the mouse's own DPI button while the app is frontmost.
+    func pollStage() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(3))
+            guard phase == .connected, !busy, let d = driver as? TelinkDriver,
+                  NSApp.isActive else { continue }
+            if let s = try? await d.readCurrentStage(), s < settings.enabledStages, s != settings.currentStage {
+                settings.currentStage = s
             }
         }
     }

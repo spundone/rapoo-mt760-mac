@@ -231,6 +231,13 @@ This settles the conflict in section 0: chip type 7 *is* used, with report ID `0
   - read 24 @ 0x638: `01 00 00 00 | 10 00 14 00 18 00 20 00 30 00 40 00 50 00 06 ff 02 00 03 02 10 00 14 00`.
     That is 800/1000/1200/1600/2400/3200/4000 DPI, 7 stages, and data[16] = 02 = current
     stage index (A HUB logged "dpiLevel: 3").
-  - read 8 @ 0x65C: `01 00 00 00 | 00 ff ff ff …`. data[0] = 00 does **not** match the current stage; meaning unknown.
+  - read 8 @ 0x65C: `01 00 00 00 | 00 ff ff ff …`. This is **not** the live stage (see below).
   - read 8 @ 0x630: `01 00 00 00 | 01 01 ff ff …` = 1000 Hz wired and wireless.
-- Writes have not been tried yet.
+- **Live DPI stage = byte at 0x648** (byte 16 of the 0x638 table). Memory snapshots of
+  0x600–0x6FF taken around presses of the top button showed only 0x648 changing
+  (`03 → 01 → 00 → 06`). The layout is: 0x630 polling, 0x638 DPI table A + stage at 0x648,
+  0x64C DPI table B + stage at 0x65C. The spec's "HID 0x65C / BLE 0x648" labels are
+  swapped for this mouse in 2.4 GHz mode.
+- Writes: memory write `BA A5 A5 len addr32 data` is acknowledged with status `01`.
+  Writing `03` to 0x65C read back `04`, and later writes there didn't change it, so its
+  behaviour is unexplained. Stage writes now target 0x648 (`[stage, old1, old2, old3]`).

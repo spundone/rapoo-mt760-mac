@@ -24,12 +24,18 @@ enum TelinkCodec {
          UInt8(address & 0xFF), UInt8((address >> 8) & 0xFF), UInt8((address >> 16) & 0xFF), UInt8(address >> 24)] + data
     }
 
-    static let dpiStageAddress: UInt32 = 0x65C
+    /// Live DPI stage on the receiver: byte 16 of the 0x638 table. Verified by pressing the
+    /// top button between memory snapshots (03 → 01 → 00 → 06). 0x65C is the copy for the
+    /// second (Bluetooth) table, not the live stage.
+    static let dpiStageAddress: UInt32 = 0x648
+    /// What 0x65C held before an early build wrote to it by mistake.
+    static let bluetoothStageAddress: UInt32 = 0x65C
+    static let bluetoothStageOriginal: [UInt8] = [0x00, 0xFF, 0xFF, 0xFF]
 
-    /// A HUB `setCurDPIGear`: write `[stage, old1, old3, old2]` (it swaps bytes 2 and 3).
+    /// Writes `[stage, old1, old2, old3]`, keeping the neighbouring bytes as read.
     static func setDPIStage(_ stage: Int, previous old: [UInt8]) -> [UInt8] {
         let o = old + [UInt8](repeating: 0xFF, count: max(0, 4 - old.count))
-        return writeMemory(dpiStageAddress, [UInt8(stage), o[1], o[3], o[2]])
+        return writeMemory(dpiStageAddress, [UInt8(stage), o[1], o[2], o[3]])
     }
 
     static func request(_ cmd: ReadCommand) -> [UInt8] {
@@ -37,7 +43,7 @@ enum TelinkCodec {
         case .firmware: [reportID, route, 0xA3]
         case .battery: [reportID, route, 0xAA]
         case .dpi: readMemory(0x638, length: 24)
-        case .dpiStage: readMemory(0x65C, length: 8)
+        case .dpiStage: readMemory(0x648, length: 8)
         case .pollingRate: readMemory(0x630, length: 8)
         }
     }
@@ -64,7 +70,7 @@ enum TelinkCodec {
         let enabled = Int(d[14]) + 1
         guard levels.allSatisfy({ $0 > 0 && $0 <= 30000 }) || levels.prefix(enabled).allSatisfy({ $0 > 0 }),
               (1...7).contains(enabled) else { return nil }
-        let current = d.count > 16 && d[16] < enabled ? Int(d[16]) : 0
+        let current = d.count > 16 && d[16] < enabled ? Int(d[16]) : 0   // = 0x648
         return (levels, enabled, current)
     }
 
@@ -141,16 +147,16 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
         try connection.open()
     }
 
-    private func transact(_ cmd: ReadCommand) async throws -> [UInt8] {
-        try await transact(TelinkCodec.request(cmd), label: cmd.rawValue)
+    private func transact(_ cmd: ReadCommand, quiet: Bool = false) async throws -> [UInt8] {
+        try await transact(TelinkCodec.request(cmd), label: cmd.rawValue, quiet: quiet)
     }
 
     /// Sends one packet and returns the response without the report ID (r[0] = status).
-    private func transact(_ bytes: [UInt8], label: String) async throws -> [UInt8] {
+    private func transact(_ bytes: [UInt8], label: String, quiet: Bool = false) async throws -> [UInt8] {
         try ensureOpen()
         var packet = bytes
         packet += [UInt8](repeating: 0, count: KnownDevice.configReportLength - packet.count)
-        HIDLog.write("→ \(label): \(HIDLog.hex(packet.prefix(max(8, bytes.count))))")
+        if !quiet { HIDLog.write("→ \(label): \(HIDLog.hex(packet.prefix(max(8, bytes.count))))") }
         try await Task.sleep(for: .milliseconds(5))
 
         var reply: Data?
@@ -172,7 +178,7 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
             r = (try? connection.getInput(reportID: TelinkCodec.reportID, length: KnownDevice.configReportLength)).map(normalize)
             if r?.isEmpty == true { r = nil }
         }
-        HIDLog.write("← \(label): \(HIDLog.hex(r!))")
+        if !quiet { HIDLog.write("← \(label): \(HIDLog.hex(r!))") }
         guard r!.first == 1 else { throw DriverError.badStatus(r!.first ?? 0) }
         return r!
     }
@@ -202,8 +208,6 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
             s.enabledStages = d.enabled
             s.currentStage = d.current
         }
-        // 0x65C reads 00 while the DPI table says stage 3; logged for comparison only.
-        _ = try? await transact(.dpiStage)
         if let p = TelinkCodec.parsePollingRate(try await transact(.pollingRate), wireless: kind != .usb) {
             s.pollingRate = p
         }
@@ -226,8 +230,29 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
     func setDPI(levels: [Int], enabledStages: Int) async throws { throw DriverError.notSupportedYet("Changing DPI") }
     func setCurrentStage(_ stage: Int) async throws {
         guard (0..<7).contains(stage) else { return }
+        try await restoreBluetoothStageIfNeeded()
         let old = Array(TelinkCodec.memory(try await transact(.dpiStage)).prefix(4))
         _ = try await transact(TelinkCodec.setDPIStage(stage, previous: old), label: "setDPIStage(\(stage))")
+    }
+
+    /// Cheap poll of the live stage (not logged).
+    func readCurrentStage() async throws -> Int? {
+        let d = Array(TelinkCodec.memory(try await transact(.dpiStage, quiet: true)))
+        return d.first.map(Int.init)
+    }
+
+    /// Builds before this fix wrote stage values to 0x65C. Put back its original bytes once.
+    private func restoreBluetoothStageIfNeeded() async throws {
+        let key = "restoredBluetoothStage65C"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        let addr = TelinkCodec.bluetoothStageAddress
+        let now = Array(TelinkCodec.memory(try await transact(TelinkCodec.readMemory(addr, length: 8), label: "read 65C")).prefix(4))
+        if now != TelinkCodec.bluetoothStageOriginal {
+            _ = try await transact(TelinkCodec.writeMemory(addr, TelinkCodec.bluetoothStageOriginal), label: "restore 65C")
+            let after = Array(TelinkCodec.memory(try await transact(TelinkCodec.readMemory(addr, length: 8), label: "verify 65C")).prefix(4))
+            HIDLog.write(after == TelinkCodec.bluetoothStageOriginal ? "0x65C restored" : "0x65C still \(HIDLog.hex(after))")
+        }
+        UserDefaults.standard.set(true, forKey: key)
     }
     func setPollingRate(_ rate: PollingRate) async throws { throw DriverError.notSupportedYet("Changing polling rate") }
     func setButton(_ id: Int, to action: ButtonAction) async throws { throw DriverError.notSupportedYet("Remapping buttons") }

@@ -41,6 +41,7 @@ struct RootView: View {
             .overlay(alignment: .bottom) { ToastView() }
         }
         .task { if DebugSnapshot.demo, !store.isDemo { store.startDemo() } }
+        .task { await store.pollStage() }
     }
 
     @ViewBuilder private var detail: some View {
