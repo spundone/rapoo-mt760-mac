@@ -3,8 +3,8 @@ import SwiftUI
 struct DPIView: View {
     @Environment(MouseStore.self) private var store
     @Namespace private var glassNS
-    static let range = 100...12000
-    static let step = 50
+    static let range = TelinkCodec.dpiRange
+    static let step = TelinkCodec.dpiStep
 
     var body: some View {
         @Bindable var store = store
@@ -38,10 +38,10 @@ struct DPIView: View {
                     }
                 }
                 HStack {
-                    if !store.writable.contains(.dpi) {
-                        Text("Editing stage values isn't enabled yet.").font(.caption).foregroundStyle(.secondary)
-                    }
+                    Text("50 to 4000 DPI, in steps of 50.").font(.caption).foregroundStyle(.secondary)
                     Spacer()
+                    Button("Revert") { Task { await store.refresh() } }
+                        .buttonStyle(.glass)
                     Button("Save to mouse") {
                         store.settings.dpiLevels = store.settings.dpiLevels.map { min(max($0, Self.range.lowerBound), Self.range.upperBound) }
                         store.applyDPI()

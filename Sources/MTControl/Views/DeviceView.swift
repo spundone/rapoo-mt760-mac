@@ -6,6 +6,7 @@ struct DeviceView: View {
 
     var body: some View {
         PaneScroll(title: "Device") {
+            GeneralPanel()
             Panel(title: "About this mouse", symbol: "info.circle") {
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
                     row("Name", store.info?.name)

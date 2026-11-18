@@ -221,7 +221,14 @@ enum HIDKey {
            0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52]
 
     /// macOS virtual keycode → HID usage, for recording shortcuts from the keyboard.
-    static func fromMacKeyCode(_ code: UInt16) -> UInt8? {
+    static func fromMacKeyCode(_ code: UInt16) -> UInt8? { macToHID[code] }
+
+    /// HID usage → macOS virtual keycode, for posting shortcuts from the Mac side.
+    static func macKeyCode(forHID usage: UInt8) -> UInt16? { hidToMac[usage] }
+
+    private static let hidToMac: [UInt8: UInt16] = Dictionary(macToHID.map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+
+    private static let macToHID: [UInt16: UInt8] = {
         let map: [UInt16: UInt8] = [
             0: 0x04, 11: 0x05, 8: 0x06, 2: 0x07, 14: 0x08, 3: 0x09, 5: 0x0A, 4: 0x0B, 34: 0x0C, 38: 0x0D,
             40: 0x0E, 37: 0x0F, 46: 0x10, 45: 0x11, 31: 0x12, 35: 0x13, 12: 0x14, 15: 0x15, 1: 0x16, 17: 0x17,
@@ -234,6 +241,6 @@ enum HIDKey {
             80: 0x6E, 90: 0x6F,
             115: 0x4A, 116: 0x4B, 117: 0x4C, 119: 0x4D, 121: 0x4E, 124: 0x4F, 123: 0x50, 125: 0x51, 126: 0x52,
         ]
-        return map[code]
-    }
+        return map
+    }()
 }

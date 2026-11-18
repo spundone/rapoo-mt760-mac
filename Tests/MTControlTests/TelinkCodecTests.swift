@@ -45,3 +45,23 @@ import Testing
     #expect(TelinkCodec.expectedLength(TelinkCodec.request(.pollingRate)) == 12)
     #expect(TelinkCodec.expectedLength(TelinkCodec.request(.battery)) == 3)
 }
+
+@Test func dpiTableWriteKeepsTrailingBytes() {
+    // Data bytes of the real table: values, 06, ff, stage 03, 00 03 02
+    let old: [UInt8] = [0x10, 0, 0x14, 0, 0x18, 0, 0x20, 0, 0x30, 0, 0x40, 0, 0x50, 0, 0x06, 0xff, 0x03, 0x00, 0x03, 0x02, 0x10, 0, 0x14, 0]
+    let p = TelinkCodec.dpiTableWrite(levels: [400, 800, 1600, 2400, 3200, 4000, 5000], enabled: 3, current: old)!
+    #expect(Array(p.prefix(8)) == [0xBA, 0xA5, 0xA5, 20, 0x38, 0x06, 0x00, 0x00])
+    let t = Array(p.dropFirst(8))
+    #expect(t.count == 20)
+    #expect(Array(t.prefix(4)) == [8, 0, 16, 0])          // 400, 800
+    #expect(t[12] == 80 && t[13] == 0)                    // 5000 clamped to 4000
+    #expect(t[14] == 2)                                   // 3 stages
+    #expect(t[15] == 0xff)                                // kept
+    #expect(t[16] == 2)                                   // stage 4 clamped into 3 stages
+    #expect(Array(t[17...]) == [0x00, 0x03, 0x02])        // kept
+}
+
+@Test func pollingWritePacket() {
+    #expect(TelinkCodec.pollingWrite(.hz500, old: [0x01, 0x01, 0xff, 0xff])
+            == [0xBA, 0xA5, 0xA5, 0x04, 0x30, 0x06, 0x00, 0x00, 0x02, 0x02, 0xff, 0xff])
+}

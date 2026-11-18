@@ -1,156 +1,272 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
+/// Mac-side button actions, gestures and per-app profiles.
 struct ButtonsView: View {
     @Environment(MouseStore.self) private var store
-    @State private var selectedID = 4
-
-    private var selected: PhysicalButton { PhysicalButton.mt760.first { $0.id == selectedID }! }
+    @Environment(HostController.self) private var host
+    /// nil = All apps
+    @State private var scope: String?
+    @State private var selected: HostButton = .middle
+    @Namespace private var ns
 
     var body: some View {
-        PaneScroll(title: "Buttons", subtitle: "Pick a button, then choose what it does. Settings are saved on the mouse.") {
-          CapabilityGate(capability: .buttons, what: "button assignments") {
-            HStack(alignment: .top, spacing: 18) {
-                Panel {
-                    MouseDiagram(selected: selectedID) { selectedID = $0.id }
-                        .frame(height: 340)
-                    Picker("Button", selection: $selectedID) {
-                        ForEach(PhysicalButton.mt760) { Text($0.name).tag($0.id) }
-                    }
-                    .labelsHidden()
-                }
-                .frame(width: 280)
+        PaneScroll(title: "Buttons", subtitle: "Actions run on your Mac, so they can differ per app.") {
+            AccessibilityBanner()
+            ScopeBar(scope: $scope)
 
-                VStack(alignment: .leading, spacing: 18) {
-                    Panel(title: selected.name, symbol: store.settings.buttons[selectedID]?.symbol) {
+            HStack(alignment: .top, spacing: 28) {
+                MouseDiagram(selected: selected.physicalID) { b in
+                    if let hb = HostButton.allCases.first(where: { $0.physicalID == b.id }) { selected = hb }
+                }
+                .frame(width: 180, height: 270)
+
+                VStack(alignment: .leading, spacing: 22) {
+                    Panel(title: scope.flatMap { host.settings.profile(for: $0)?.name } ?? "All apps") {
+                        ForEach(HostButton.allCases) { b in
+                            ActionRow(title: b.title, highlighted: selected == b,
+                                      action: binding(for: b), allowDefaultLabel: scope == nil ? "Default" : "Same as All apps")
+                                .onTapGesture { selected = b }
+                        }
                         HStack {
-                            Text(store.settings.buttons[selectedID]?.title ?? "—").font(.title2.weight(.semibold))
-                            if let d = store.settings.buttons[selectedID]?.detail {
-                                Text(d).font(.title3.monospaced()).foregroundStyle(.secondary)
-                            }
+                            Text("Top button").foregroundStyle(.secondary)
                             Spacer()
-                            Button("Default") { store.assign(selected.defaultAction, to: selected) }
-                                .buttonStyle(.glass)
+                            Text("DPI cycle (set on the mouse)").foregroundStyle(.tertiary)
                         }
+                        .font(.callout)
                     }
-                    ActionSection(title: "Mouse", symbol: "computermouse", actions:
-                        MouseButton.allCases.map { ButtonAction.mouse($0) } + [.doubleClick, .scroll(up: true), .scroll(up: false)],
-                        current: store.settings.buttons[selectedID]) { assign($0) }
-                    ActionSection(title: "macOS shortcuts", symbol: "command", actions: MacShortcut.all.map(\.action),
-                        current: store.settings.buttons[selectedID]) { assign($0) }
-                    ShortcutRecorderCard { assign($0) }
-                    ActionSection(title: "Media", symbol: "music.note", actions: MediaKey.allCases.map { .media($0) },
-                        current: store.settings.buttons[selectedID]) { assign($0) }
-                    ActionSection(title: "Sensitivity & other", symbol: "scope",
-                        actions: DPIFunction.allCases.map { .dpi($0) } + [.disabled],
-                        current: store.settings.buttons[selectedID]) { assign($0) }
-                }
-            }
-          }
-        }
-    }
 
-    private func assign(_ a: ButtonAction) {
-        if selectedID == 0, a != .mouse(.left), !store.settings.buttons.contains(where: { $0.key != 0 && $0.value == .mouse(.left) }) {
-            store.toast = "Keep at least one button as left click"
-            return
-        }
-        store.assign(a, to: selected)
-    }
-}
+                    if usesGesture {
+                        GesturePanel()
+                    }
 
-struct ActionSection: View {
-    let title: String
-    let symbol: String
-    let actions: [ButtonAction]
-    let current: ButtonAction?
-    let pick: (ButtonAction) -> Void
-
-    var body: some View {
-        Panel(title: title, symbol: symbol) {
-            GlassEffectContainer(spacing: 8) {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
-                    ForEach(actions, id: \.self) { a in
-                        Button { pick(a) } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: icon(for: a)).frame(width: 18)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(a.title).lineLimit(1)
-                                    if let d = a.detail { Text(d).font(.caption.monospaced()).foregroundStyle(.secondary) }
+                    if let id = scope, let idx = host.settings.apps.firstIndex(where: { $0.bundleID == id }) {
+                        Panel(title: "When this app is in front") {
+                            Picker("DPI stage", selection: Binding(
+                                get: { host.settings.apps[idx].dpiStage },
+                                set: { host.settings.apps[idx].dpiStage = $0 })) {
+                                Text("Don't change").tag(Int?.none)
+                                ForEach(0..<store.settings.enabledStages, id: \.self) { i in
+                                    Text("Stage \(i + 1) · \(store.settings.dpiLevels[i]) DPI").tag(Int?.some(i))
                                 }
-                                Spacer(minLength: 0)
                             }
-                            .padding(.horizontal, 12).padding(.vertical, 9)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(.rect)
+                            HStack {
+                                Spacer()
+                                Button("Remove app", role: .destructive) {
+                                    host.removeProfile(id)
+                                    scope = nil
+                                }
+                                .buttonStyle(.glass)
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .glassEffect(current == a ? .regular.tint(.accentColor.opacity(0.55)).interactive() : .regular.interactive(),
-                                     in: .rect(cornerRadius: 12))
                     }
                 }
             }
         }
     }
 
-    private func icon(for a: ButtonAction) -> String {
-        if case .shortcut(let m, let k) = a, let p = MacShortcut.all.first(where: { $0.modifiers == m && $0.key == k }) { return p.symbol }
-        return a.symbol
+    private var usesGesture: Bool {
+        let s = host.settings
+        return s.global.actions.values.contains(.gesture) || s.apps.contains { $0.buttons.actions.values.contains(.gesture) }
+    }
+
+    private func binding(for b: HostButton) -> Binding<HostAction?> {
+        Binding(
+            get: {
+                if let id = scope { return host.settings.profile(for: id)?.buttons.actions[b] }
+                return host.settings.global.actions[b] ?? .passthrough
+            },
+            set: { new in
+                if let id = scope, let i = host.settings.apps.firstIndex(where: { $0.bundleID == id }) {
+                    host.settings.apps[i].buttons.actions[b] = new
+                } else {
+                    host.settings.global.actions[b] = new ?? .passthrough
+                }
+            })
     }
 }
 
-/// Press a key combination on the keyboard to capture it.
-struct ShortcutRecorderCard: View {
-    let pick: (ButtonAction) -> Void
-    @State private var recording = false
-    @State private var captured: (Modifiers, UInt8)?
-    @State private var monitor: Any?
+/// "All apps" plus one chip per app profile, and an add button.
+struct ScopeBar: View {
+    @Environment(HostController.self) private var host
+    @Binding var scope: String?
 
     var body: some View {
-        Panel(title: "Custom shortcut", symbol: "keyboard") {
-            HStack(spacing: 12) {
-                Text(label)
-                    .font(.title3.monospaced())
-                    .frame(minWidth: 160, alignment: .leading)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .glassEffect(recording ? .regular.tint(.red.opacity(0.35)) : .regular, in: .capsule)
-                Button(recording ? "Cancel" : "Record") { recording ? stop() : start() }
-                    .buttonStyle(.glass)
-                Button("Assign") {
-                    if let (m, k) = captured { pick(.shortcut(m, key: k)) }
+        ScrollView(.horizontal, showsIndicators: false) {
+            GlassEffectContainer(spacing: 6) {
+                HStack(spacing: 6) {
+                    chip(nil, "All apps", nil)
+                    ForEach(host.settings.apps) { p in chip(p.bundleID, p.name, HostController.icon(for: p.bundleID)) }
+                    Button { addApp() } label: {
+                        Image(systemName: "plus").frame(width: 28, height: 28).contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .help("Add an app")
                 }
-                .buttonStyle(.glassProminent)
-                .disabled(captured == nil)
+                .padding(2)
             }
-            Text("Any combination of ⌃ ⌥ ⇧ ⌘ plus one key.").font(.caption).foregroundStyle(.secondary)
         }
-        .onDisappear { stop() }
+    }
+
+    private func chip(_ id: String?, _ title: String, _ icon: NSImage?) -> some View {
+        let on = scope == id
+        return Button { scope = id } label: {
+            HStack(spacing: 6) {
+                if let icon { Image(nsImage: icon).resizable().frame(width: 16, height: 16) }
+                Text(title).font(.callout)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(on ? .regular.tint(.accentColor.opacity(0.35)).interactive() : .regular.interactive(), in: .capsule)
+    }
+
+    private func addApp() {
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Add"
+        if panel.runModal() == .OK, let url = panel.url {
+            host.addProfile(for: url)
+            if let id = Bundle(url: url)?.bundleIdentifier { scope = id }
+        }
+    }
+}
+
+/// A labelled action menu. `nil` means "inherit" in app profiles.
+struct ActionRow: View {
+    let title: String
+    var highlighted = false
+    @Binding var action: HostAction?
+    var allowDefaultLabel = "Default"
+    @State private var recording = false
+
+    var body: some View {
+        HStack {
+            Text(title).foregroundStyle(highlighted ? .primary : .secondary)
+            Spacer()
+            Menu {
+                Button(allowDefaultLabel) { action = allowDefaultLabel == "Default" ? .passthrough : nil }
+                Divider()
+                Button("Gesture button") { action = .gesture }
+                Section("System") {
+                    ForEach(SystemAction.allCases, id: \.self) { s in Button(s.title) { action = .system(s) } }
+                }
+                Section("Shortcuts") {
+                    ForEach(MacShortcut.all) { s in
+                        Button("\(s.title)   \(s.modifiers.symbols)\(HIDKey.name(for: s.key))") { action = s.action.hostAction }
+                    }
+                    Button("Record a shortcut…") { recording = true }
+                }
+                Section("Mouse") {
+                    ForEach(MouseButton.allCases, id: \.self) { b in Button(b.title) { action = .mouse(b) } }
+                }
+                Divider()
+                Button("Do nothing") { action = .disabled }
+            } label: {
+                Text(label)
+            }
+            .menuStyle(.button)
+            .buttonStyle(.glass)
+            .fixedSize()
+        }
+        .font(.callout)
+        .contentShape(.rect)
+        .popover(isPresented: $recording) {
+            ShortcutRecorder { m, k in action = .shortcut(m, key: k); recording = false }
+                .padding(16)
+        }
     }
 
     private var label: String {
-        if recording { return "Press keys…" }
-        if let (m, k) = captured { return m.symbols + HIDKey.name(for: k) }
-        return "None"
+        guard let action else { return allowDefaultLabel }
+        if action == .passthrough { return "Default" }
+        return action.title
     }
+}
 
-    private func start() {
-        recording = true
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
-            guard let usage = HIDKey.fromMacKeyCode(e.keyCode) else { return nil }
-            var m: Modifiers = []
-            if e.modifierFlags.contains(.control) { m.insert(.control) }
-            if e.modifierFlags.contains(.option) { m.insert(.option) }
-            if e.modifierFlags.contains(.shift) { m.insert(.shift) }
-            if e.modifierFlags.contains(.command) { m.insert(.command) }
-            captured = (m, usage)
-            stop()
-            return nil
+extension ButtonAction {
+    var hostAction: HostAction {
+        switch self {
+        case .shortcut(let m, let k): .shortcut(m, key: k)
+        case .mouse(let b): .mouse(b)
+        case .disabled: .disabled
+        default: .passthrough
+        }
+    }
+}
+
+struct GesturePanel: View {
+    @Environment(HostController.self) private var host
+
+    var body: some View {
+        @Bindable var host = host
+        Panel(title: "Gesture button") {
+            Text("Hold the button and move the mouse, or just click it.").font(.caption).foregroundStyle(.secondary)
+            ActionRow(title: "Click", action: opt(\.click))
+            ActionRow(title: "Move up", action: opt(\.up))
+            ActionRow(title: "Move down", action: opt(\.down))
+            ActionRow(title: "Move left", action: opt(\.left))
+            ActionRow(title: "Move right", action: opt(\.right))
+            HStack {
+                Text("Distance").foregroundStyle(.secondary)
+                Slider(value: $host.settings.gestureThreshold, in: 20...200)
+            }
+            .font(.callout)
         }
     }
 
-    private func stop() {
-        recording = false
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
+    private func opt(_ kp: WritableKeyPath<GestureMap, HostAction>) -> Binding<HostAction?> {
+        Binding(get: { host.settings.gestures[keyPath: kp] },
+                set: { host.settings.gestures[keyPath: kp] = $0 ?? .passthrough })
+    }
+}
+
+struct AccessibilityBanner: View {
+    @Environment(HostController.self) private var host
+
+    var body: some View {
+        if host.settings.needsEventTap && !host.accessibilityGranted {
+            HStack(spacing: 12) {
+                Image(systemName: "hand.raised").foregroundStyle(.secondary)
+                Text("Button actions and scrolling need Accessibility access.").font(.callout)
+                Spacer()
+                Button("Allow…") { host.requestAccessibility() }.buttonStyle(.glassProminent)
+            }
+            .padding(12)
+            .background(.quinary, in: .rect(cornerRadius: 12))
+        }
+    }
+}
+
+/// Press a key combination to capture it.
+struct ShortcutRecorder: View {
+    let done: (Modifiers, UInt8) -> Void
+    @State private var monitor: Any?
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("Press a shortcut").font(.headline)
+            Text("Any of ⌃ ⌥ ⇧ ⌘ plus one key").font(.caption).foregroundStyle(.secondary)
+        }
+        .onAppear {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
+                guard let usage = HIDKey.fromMacKeyCode(e.keyCode) else { return nil }
+                var m: Modifiers = []
+                if e.modifierFlags.contains(.control) { m.insert(.control) }
+                if e.modifierFlags.contains(.option) { m.insert(.option) }
+                if e.modifierFlags.contains(.shift) { m.insert(.shift) }
+                if e.modifierFlags.contains(.command) { m.insert(.command) }
+                done(m, usage)
+                return nil
+            }
+        }
+        .onDisappear {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+        }
     }
 }

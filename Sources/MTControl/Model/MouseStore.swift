@@ -74,6 +74,19 @@ final class MouseStore {
             phase = .connected
         } catch {
             phase = .failed(error.localizedDescription)
+            scheduleRetry()
+        }
+    }
+
+    @ObservationIgnored private var retryTask: Task<Void, Never>?
+
+    /// A sleeping mouse doesn't answer; keep trying quietly until it wakes up.
+    private func scheduleRetry() {
+        retryTask?.cancel()
+        retryTask = Task {
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled, driver != nil, phase != .connected else { return }
+            await refresh()
         }
     }
 
@@ -93,7 +106,31 @@ final class MouseStore {
 
     func applyDPI() {
         let levels = settings.dpiLevels, n = settings.enabledStages
-        perform("DPI saved") { try await $0.setDPI(levels: levels, enabledStages: n) }
+        writeThenVerify(success: "DPI saved", check: { $0.dpiLevels.prefix(n) == levels.prefix(n) && $0.enabledStages == n }) {
+            try await $0.setDPI(levels: levels, enabledStages: n)
+        }
+    }
+
+    /// Runs a write, re-reads settings, and reports whether the mouse took it.
+    private func writeThenVerify(success: String, check: @escaping (MouseSettings) -> Bool,
+                                 _ op: @escaping (MouseDriver) async throws -> Void) {
+        guard let driver else { return }
+        Task {
+            busy = true
+            defer { busy = false }
+            do {
+                try await op(driver)
+                if let fresh = try? await driver.readSettings() {
+                    settings = fresh
+                    toast = check(fresh) ? success : "The mouse didn't keep that change"
+                } else {
+                    toast = success
+                }
+            } catch {
+                toast = "Couldn't save: \(error.localizedDescription)"
+                if let fresh = try? await driver.readSettings() { settings = fresh }
+            }
+        }
     }
 
     func selectStage(_ stage: Int) {
@@ -119,8 +156,11 @@ final class MouseStore {
     }
 
     func setPollingRate(_ rate: PollingRate) {
+        guard rate != settings.pollingRate else { return }
         settings.pollingRate = rate
-        perform("Polling rate \(rate.title)") { try await $0.setPollingRate(rate) }
+        writeThenVerify(success: "Polling rate \(rate.title)", check: { $0.pollingRate == rate }) {
+            try await $0.setPollingRate(rate)
+        }
     }
 
     func assign(_ action: ButtonAction, to button: PhysicalButton) {
@@ -162,6 +202,16 @@ final class MouseStore {
                 settings.currentStage = s
             }
         }
+    }
+
+    /// Re-reads battery quietly; returns the new level.
+    @discardableResult
+    func refreshBattery() async -> Int? {
+        guard phase == .connected, !busy, let d = driver as? TelinkDriver,
+              let b = try? await d.readBattery() else { return info?.batteryPercent }
+        info?.batteryPercent = b.percent
+        info?.charging = b.charging
+        return b.percent
     }
 
     func factoryReset() {

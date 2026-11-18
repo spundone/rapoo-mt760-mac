@@ -1,12 +1,13 @@
 import SwiftUI
 
 enum Pane: String, CaseIterable, Identifiable {
-    case overview = "Overview", buttons = "Buttons", dpi = "Sensitivity", performance = "Performance", device = "Device"
+    case overview = "Overview", buttons = "Buttons", scrolling = "Scrolling", dpi = "Sensitivity", performance = "Performance", device = "Device"
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .overview: "computermouse"
         case .buttons: "button.programmable"
+        case .scrolling: "scroll"
         case .dpi: "scope"
         case .performance: "speedometer"
         case .device: "info.circle"
@@ -29,7 +30,7 @@ struct RootView: View {
             ZStack {
                 Backdrop()
                 Group {
-                    if store.phase == .connected {
+                    if store.phase == .connected || pane == .buttons || pane == .scrolling {
                         detail
                     } else {
                         SearchingView()
@@ -48,6 +49,7 @@ struct RootView: View {
         switch pane {
         case .overview: OverviewView(pane: $pane)
         case .buttons: ButtonsView()
+        case .scrolling: ScrollingView()
         case .dpi: DPIView()
         case .performance: PerformanceView()
         case .device: DeviceView()
@@ -112,8 +114,10 @@ struct SearchingView: View {
             VStack(spacing: 6) {
                 switch store.phase {
                 case .failed(let msg):
-                    Text("Couldn't talk to the mouse").font(.title3.weight(.medium))
-                    Text(msg).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text("Waiting for the mouse").font(.title3.weight(.medium))
+                    Text("Move it to wake it up. MT Control keeps trying every few seconds.")
+                        .foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text(msg).font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center)
                 default:
                     Text("Looking for your MT760").font(.title3.weight(.medium))
                     Text("Plug in the 2.4 GHz receiver or the USB cable.").foregroundStyle(.secondary)

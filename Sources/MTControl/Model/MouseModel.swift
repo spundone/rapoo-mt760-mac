@@ -52,7 +52,7 @@ struct MouseSettings: Equatable, Sendable {
     var sleepMinutes: Int
 
     static let factory = MouseSettings(
-        dpiLevels: [800, 1200, 1600, 2400, 3200, 4000],
+        dpiLevels: [800, 1000, 1200, 1600, 2400, 3200, 4000],
         enabledStages: 4,
         currentStage: 2,
         pollingRate: .hz1000,

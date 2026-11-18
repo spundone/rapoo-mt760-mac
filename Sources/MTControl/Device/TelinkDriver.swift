@@ -91,6 +91,35 @@ enum TelinkCodec {
         return Int(s)
     }
 
+    /// From MouseForTelink::getDPISupportInfo: 7 stages, 50–4000 DPI, step 50.
+    static let maxStages = 7
+    static let dpiRange = 50...4000
+    static let dpiStep = 50
+    static let dpiTableAddress: UInt32 = 0x638
+    static let pollingAddress: UInt32 = 0x630
+
+    /// New 20-byte DPI table: values and stage count replaced, bytes 15–19 kept as read
+    /// (byte 16 is the live stage, clamped to the new count).
+    static func dpiTableWrite(levels: [Int], enabled: Int, current old: [UInt8]) -> [UInt8]? {
+        guard old.count >= 20, levels.count == maxStages, (1...maxStages).contains(enabled) else { return nil }
+        var t = [UInt8]()
+        for dpi in levels {
+            let clamped = min(max(dpi, dpiRange.lowerBound), dpiRange.upperBound)
+            let v = UInt16(clamped / dpiStep)
+            t += [UInt8(v & 0xFF), UInt8(v >> 8)]
+        }
+        t.append(UInt8(enabled - 1))
+        t.append(old[15])
+        t.append(min(old[16], UInt8(enabled - 1)))
+        t += old[17..<20]
+        return writeMemory(dpiTableAddress, t)
+    }
+
+    static func pollingWrite(_ rate: PollingRate, old: [UInt8]) -> [UInt8]? {
+        guard old.count >= 4, let code = rateCodes.first(where: { $0.value == rate })?.key else { return nil }
+        return writeMemory(pollingAddress, [code, code, old[2], old[3]])
+    }
+
     static let rateCodes: [UInt8: PollingRate] = [0x08: .hz125, 0x04: .hz250, 0x02: .hz500, 0x01: .hz1000]
 
     /// data[0] = wired rate, data[1] = wireless rate.
@@ -151,8 +180,8 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
     }
 
     let capabilities: Capabilities = [.battery, .dpi, .dpiStage, .pollingRate]
-    /// Only stage switching is enabled so far; it is easy to undo with the mouse button.
-    let writable: Capabilities = [.dpiStage]
+    /// Writes verified on an MT760L through the receiver.
+    let writable: Capabilities = [.dpiStage, .dpi, .pollingRate]
 
     private func ensureOpen() throws {
         guard !connection.isOpen else { return }
@@ -244,12 +273,23 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
         HIDLog.write("=== end snapshot")
     }
 
-    func setDPI(levels: [Int], enabledStages: Int) async throws { throw DriverError.notSupportedYet("Changing DPI") }
+    func setDPI(levels: [Int], enabledStages: Int) async throws {
+        let old = Array(TelinkCodec.memory(try await transact(.dpi)))
+        guard let packet = TelinkCodec.dpiTableWrite(levels: levels, enabled: enabledStages, current: old) else {
+            throw DriverError.unreadable("DPI table")
+        }
+        _ = try await transact(packet, label: "setDPITable")
+    }
     func setCurrentStage(_ stage: Int) async throws {
         guard (0..<7).contains(stage) else { return }
         try await restoreBluetoothStageIfNeeded()
         let old = Array(TelinkCodec.memory(try await transact(.dpiStage)).prefix(4))
         _ = try await transact(TelinkCodec.setDPIStage(stage, previous: old), label: "setDPIStage(\(stage))")
+    }
+
+    /// Quiet battery read for periodic polling.
+    func readBattery() async throws -> (percent: Int, charging: Bool)? {
+        TelinkCodec.parseBattery(try await transact(.battery, quiet: true))
     }
 
     /// Cheap poll of the live stage (not logged).
@@ -271,7 +311,11 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
         }
         UserDefaults.standard.set(true, forKey: key)
     }
-    func setPollingRate(_ rate: PollingRate) async throws { throw DriverError.notSupportedYet("Changing polling rate") }
+    func setPollingRate(_ rate: PollingRate) async throws {
+        let old = Array(TelinkCodec.memory(try await transact(.pollingRate)))
+        guard let packet = TelinkCodec.pollingWrite(rate, old: old) else { throw DriverError.unreadable("polling rate") }
+        _ = try await transact(packet, label: "setPollingRate(\(rate.rawValue))")
+    }
     func setButton(_ id: Int, to action: ButtonAction) async throws { throw DriverError.notSupportedYet("Remapping buttons") }
     func setSleep(minutes: Int) async throws { throw DriverError.notSupportedYet("Changing sleep time") }
     func factoryReset() async throws { throw DriverError.notSupportedYet("Factory reset") }

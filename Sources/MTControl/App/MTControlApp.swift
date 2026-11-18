@@ -4,12 +4,20 @@ import AppKit
 @main
 struct MTControlApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var store = MouseStore()
+    @State private var store: MouseStore
+    @State private var host: HostController
+
+    init() {
+        let s = MouseStore()
+        _store = State(initialValue: s)
+        _host = State(initialValue: HostController(store: s))
+    }
 
     var body: some Scene {
         WindowGroup("MT Control", id: "main") {
             RootView()
                 .environment(store)
+                .environment(host)
                 .frame(minWidth: 860, minHeight: 600)
         }
         .windowStyle(.hiddenTitleBar)
@@ -31,9 +39,13 @@ struct MTControlApp: App {
         }
 
         MenuBarExtra {
-            MenuBarView().environment(store)
+            MenuBarView().environment(store).environment(host)
         } label: {
-            Image(systemName: "computermouse.fill")
+            if host.settings.batteryInMenuBar, let b = store.info?.batteryPercent {
+                Label("\(b)%", systemImage: "computermouse.fill").labelStyle(.titleAndIcon)
+            } else {
+                Image(systemName: "computermouse.fill")
+            }
         }
         .menuBarExtraStyle(.window)
     }
