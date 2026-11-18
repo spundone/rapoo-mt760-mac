@@ -33,3 +33,9 @@ import Testing
     #expect(TelinkCodec.parseBattery([0x01, 0x00, 0x55])?.percent == 85)
     #expect(TelinkCodec.parsePollingRate([0x01, 0, 0, 0, 0x01, 0x02], wireless: true) == .hz500)
 }
+
+@Test func setDPIStagePacket() {
+    // Old 0x65C bytes as read from the MT760L: 00 ff ff ff
+    #expect(TelinkCodec.setDPIStage(3, previous: [0x00, 0xff, 0xff, 0xff])
+            == [0xBA, 0xA5, 0xA5, 0x04, 0x5C, 0x06, 0x00, 0x00, 0x03, 0xff, 0xff, 0xff])
+}

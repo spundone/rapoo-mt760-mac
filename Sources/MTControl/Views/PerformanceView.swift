@@ -7,7 +7,7 @@ struct PerformanceView: View {
     var body: some View {
         PaneScroll(title: "Performance", subtitle: "Higher polling feels smoother and uses more battery.") {
             if store.capabilities.contains(.pollingRate) {
-                GlassCard(title: "Polling rate", symbol: "speedometer") {
+                Panel(title: "Polling rate", symbol: "speedometer") {
                     GlassEffectContainer(spacing: 8) {
                         HStack(spacing: 8) {
                             ForEach(PollingRate.allCases) { r in
@@ -24,14 +24,14 @@ struct PerformanceView: View {
                             }
                         }
                     }
-                    .disabled(store.readOnly)
+                    .disabled(!store.writable.contains(.pollingRate))
                 }
             }
             if !store.capabilities.contains(.pollingRate) && !store.capabilities.contains(.sleep) {
                 CapabilityGate(capability: .pollingRate, what: "the polling rate") { EmptyView() }
             }
             if store.capabilities.contains(.sleep) {
-                GlassCard(title: "Sleep", symbol: "moon.zzz") {
+                Panel(title: "Sleep", symbol: "moon.zzz") {
                     Picker("Sleep after", selection: Binding(get: { store.settings.sleepMinutes }, set: { store.setSleep($0) })) {
                         ForEach([1, 2, 5, 10, 15, 30], id: \.self) { Text("\($0) min").tag($0) }
                     }

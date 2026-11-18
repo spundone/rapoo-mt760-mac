@@ -11,7 +11,7 @@ struct ButtonsView: View {
         PaneScroll(title: "Buttons", subtitle: "Pick a button, then choose what it does. Settings are saved on the mouse.") {
           CapabilityGate(capability: .buttons, what: "button assignments") {
             HStack(alignment: .top, spacing: 18) {
-                GlassCard {
+                Panel {
                     MouseDiagram(selected: selectedID) { selectedID = $0.id }
                         .frame(height: 340)
                     Picker("Button", selection: $selectedID) {
@@ -22,7 +22,7 @@ struct ButtonsView: View {
                 .frame(width: 280)
 
                 VStack(alignment: .leading, spacing: 18) {
-                    GlassCard(title: selected.name, symbol: store.settings.buttons[selectedID]?.symbol) {
+                    Panel(title: selected.name, symbol: store.settings.buttons[selectedID]?.symbol) {
                         HStack {
                             Text(store.settings.buttons[selectedID]?.title ?? "—").font(.title2.weight(.semibold))
                             if let d = store.settings.buttons[selectedID]?.detail {
@@ -67,7 +67,7 @@ struct ActionSection: View {
     let pick: (ButtonAction) -> Void
 
     var body: some View {
-        GlassCard(title: title, symbol: symbol) {
+        Panel(title: title, symbol: symbol) {
             GlassEffectContainer(spacing: 8) {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
                     ForEach(actions, id: \.self) { a in
@@ -107,7 +107,7 @@ struct ShortcutRecorderCard: View {
     @State private var monitor: Any?
 
     var body: some View {
-        GlassCard(title: "Custom shortcut", symbol: "keyboard") {
+        Panel(title: "Custom shortcut", symbol: "keyboard") {
             HStack(spacing: 12) {
                 Text(label)
                     .font(.title3.monospaced())

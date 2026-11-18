@@ -14,7 +14,7 @@ final class MouseStore {
     private(set) var info: DeviceInfo?
     var settings: MouseSettings = .factory
     private(set) var capabilities: Capabilities = []
-    private(set) var readOnly = false
+    private(set) var writable: Capabilities = []
     private(set) var interfaces: [HIDInterfaceInfo] = []
     private(set) var busy = false
     var toast: String?
@@ -59,7 +59,7 @@ final class MouseStore {
     private func attach(_ d: MouseDriver) {
         driver = d
         capabilities = d.capabilities
-        readOnly = d.isReadOnly
+        writable = d.writable
         Task { await refresh() }
     }
 
@@ -96,8 +96,25 @@ final class MouseStore {
     }
 
     func selectStage(_ stage: Int) {
+        guard writable.contains(.dpiStage), stage != settings.currentStage else { return }
+        let previous = settings.currentStage
         settings.currentStage = stage
-        perform("DPI stage \(stage + 1)") { try await $0.setCurrentStage(stage) }
+        guard let driver else { return }
+        Task {
+            busy = true
+            defer { busy = false }
+            do {
+                try await driver.setCurrentStage(stage)
+                // Read back so the UI shows what the mouse actually did.
+                settings = try await driver.readSettings()
+                toast = settings.currentStage == stage
+                    ? "\(settings.dpiLevels[stage]) DPI"
+                    : "The mouse didn't switch stage"
+            } catch {
+                settings.currentStage = previous
+                toast = "Couldn't switch stage: \(error.localizedDescription)"
+            }
+        }
     }
 
     func setPollingRate(_ rate: PollingRate) {

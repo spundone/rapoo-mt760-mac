@@ -6,7 +6,7 @@ struct DeviceView: View {
 
     var body: some View {
         PaneScroll(title: "Device") {
-            GlassCard(title: "About this mouse", symbol: "info.circle") {
+            Panel(title: "About this mouse", symbol: "info.circle") {
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
                     row("Name", store.info?.name)
                     row("Connection", store.info?.connection.rawValue)
@@ -18,15 +18,15 @@ struct DeviceView: View {
                     Button("Show HID log") { NSWorkspace.shared.activateFileViewerSelecting([HIDLog.url]) }.buttonStyle(.glass)
                 }
             }
-            if store.capabilities.contains(.factoryReset), !store.readOnly {
-                GlassCard(title: "Factory settings", symbol: "arrow.counterclockwise") {
+            if store.writable.contains(.factoryReset) {
+                Panel(title: "Factory settings", symbol: "arrow.counterclockwise") {
                     Text("Puts DPI, polling rate and every button back to how the mouse shipped.")
                         .foregroundStyle(.secondary)
                     Button("Restore factory settings…", role: .destructive) { confirmReset = true }
                         .buttonStyle(.glass)
                 }
             }
-            GlassCard(title: "HID interfaces", symbol: "cable.connector") {
+            Panel(title: "HID interfaces", symbol: "cable.connector") {
                 if store.interfaces.isEmpty {
                     Text("No Rapoo USB interfaces are connected.").foregroundStyle(.secondary)
                 } else {
@@ -63,7 +63,7 @@ struct MenuBarView: View {
                             Button("\(store.settings.dpiLevels[i])") { store.selectStage(i) }
                                 .buttonStyle(.glass)
                                 .tint(store.settings.currentStage == i ? .accentColor : nil)
-                                .disabled(store.readOnly)
+                                .disabled(!store.writable.contains(.dpiStage))
                         }
                     }
                 }

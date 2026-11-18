@@ -33,14 +33,14 @@ struct MouseDiagram: View {
             let origin = CGPoint(x: (geo.size.width - size.width) / 2, y: (geo.size.height - size.height) / 2)
             ZStack(alignment: .topLeading) {
                 ZStack {
-                    MouseShape().fill(.ultraThinMaterial)
-                    MouseShape().stroke(.primary.opacity(0.25), lineWidth: 1.5)
+                    MouseShape().fill(.quinary)
+                    MouseShape().stroke(.tertiary, lineWidth: 1)
                     // Button split and wheel.
                     Path { p in
                         p.move(to: CGPoint(x: size.width * 0.5, y: 0))
                         p.addLine(to: CGPoint(x: size.width * 0.5, y: size.height * 0.38))
-                    }.stroke(.primary.opacity(0.2), lineWidth: 1.2)
-                    Capsule().fill(.primary.opacity(0.35))
+                    }.stroke(.quaternary, lineWidth: 1)
+                    Capsule().fill(.tertiary)
                         .frame(width: size.width * 0.08, height: size.height * 0.11)
                         .position(x: size.width * 0.5, y: size.height * 0.16)
                 }
@@ -51,10 +51,8 @@ struct MouseDiagram: View {
                     let pt = CGPoint(x: origin.x + b.anchor.x * size.width, y: origin.y + b.anchor.y * size.height)
                     Button { onTap?(b) } label: {
                         Circle()
-                            .fill(selected == b.id ? Color.accentColor : Color.white.opacity(0.85))
-                            .frame(width: 16, height: 16)
-                            .overlay(Circle().stroke(.black.opacity(0.2)))
-                            .shadow(color: selected == b.id ? .accentColor.opacity(0.6) : .clear, radius: 8)
+                            .fill(selected == b.id ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                            .frame(width: selected == b.id ? 12 : 8, height: selected == b.id ? 12 : 8)
                             .frame(width: 32, height: 32)
                             .contentShape(Circle())
                     }

@@ -69,14 +69,15 @@ struct Capabilities: OptionSet, Sendable {
     static let battery = Capabilities(rawValue: 1 << 3)
     static let sleep = Capabilities(rawValue: 1 << 4)
     static let factoryReset = Capabilities(rawValue: 1 << 5)
-    static let all: Capabilities = [.dpi, .pollingRate, .buttons, .battery, .sleep, .factoryReset]
+    static let dpiStage = Capabilities(rawValue: 1 << 6)
+    static let all: Capabilities = [.dpi, .dpiStage, .pollingRate, .buttons, .battery, .sleep, .factoryReset]
 }
 
 /// Anything that can talk to a mouse: the real HID driver, or a demo.
 protocol MouseDriver: AnyObject, Sendable {
     var capabilities: Capabilities { get }
-    /// True while writes are not yet verified on hardware.
-    var isReadOnly: Bool { get }
+    /// The subset of `capabilities` that can be changed (writes verified on hardware).
+    var writable: Capabilities { get }
     func readInfo() async throws -> DeviceInfo
     func readSettings() async throws -> MouseSettings
     func setDPI(levels: [Int], enabledStages: Int) async throws
@@ -90,7 +91,7 @@ protocol MouseDriver: AnyObject, Sendable {
 final class DemoDriver: MouseDriver, @unchecked Sendable {
     private var settings = MouseSettings.factory
     let capabilities: Capabilities = .all
-    let isReadOnly = false
+    var writable: Capabilities { capabilities }
 
     func readInfo() async throws -> DeviceInfo {
         DeviceInfo(name: "MT760L (demo)", firmware: "1.4.4", connection: .demo, batteryPercent: 82, charging: false)

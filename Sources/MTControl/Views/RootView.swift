@@ -54,24 +54,10 @@ struct RootView: View {
     }
 }
 
-/// Soft colour field behind the glass so it has something to refract.
+/// Plain window background; glass is reserved for controls.
 struct Backdrop: View {
-    @Environment(\.colorScheme) private var scheme
     var body: some View {
-        MeshGradient(width: 3, height: 3, points: [
-            [0, 0], [0.5, 0], [1, 0],
-            [0, 0.5], [0.6, 0.45], [1, 0.5],
-            [0, 1], [0.5, 1], [1, 1],
-        ], colors: scheme == .dark ? [
-            .black, Color(red: 0.05, green: 0.08, blue: 0.2), .black,
-            Color(red: 0.12, green: 0.05, blue: 0.22), Color(red: 0.0, green: 0.22, blue: 0.35), Color(red: 0.05, green: 0.05, blue: 0.12),
-            .black, Color(red: 0.2, green: 0.07, blue: 0.1), .black,
-        ] : [
-            Color(red: 0.93, green: 0.95, blue: 1), Color(red: 0.85, green: 0.9, blue: 1), Color(red: 0.97, green: 0.94, blue: 1),
-            Color(red: 0.9, green: 0.86, blue: 1), Color(red: 0.75, green: 0.9, blue: 1), Color(red: 0.95, green: 0.97, blue: 1),
-            Color(red: 1, green: 0.93, blue: 0.92), Color(red: 0.92, green: 0.95, blue: 1), Color(red: 0.95, green: 0.95, blue: 0.98),
-        ])
-        .ignoresSafeArea()
+        Color(nsColor: .windowBackgroundColor).ignoresSafeArea()
     }
 }
 
@@ -80,7 +66,7 @@ struct ConnectionBadge: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: store.info?.connection.symbol ?? "magnifyingglass")
-                .font(.title3)
+                .font(.body).foregroundStyle(.secondary)
                 .symbolEffect(.pulse, isActive: store.phase == .searching)
             VStack(alignment: .leading, spacing: 2) {
                 Text(store.info?.name ?? "No mouse").font(.callout.weight(.semibold))
@@ -89,8 +75,7 @@ struct ConnectionBadge: View {
             Spacer(minLength: 0)
             if let b = store.info?.batteryPercent { BatteryGlyph(percent: b, charging: store.info?.charging ?? false) }
         }
-        .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .padding(.horizontal, 8).padding(.vertical, 6)
     }
 }
 
@@ -120,17 +105,16 @@ struct SearchingView: View {
     var body: some View {
         VStack(spacing: 22) {
             Image(systemName: "computermouse")
-                .font(.system(size: 64, weight: .light))
+                .font(.system(size: 44, weight: .ultraLight))
+                .foregroundStyle(.secondary)
                 .symbolEffect(.breathe)
-                .frame(width: 140, height: 140)
-                .glassEffect(.regular.interactive(), in: .circle)
             VStack(spacing: 6) {
                 switch store.phase {
                 case .failed(let msg):
-                    Text("Couldn't talk to the mouse").font(.title2.weight(.semibold))
+                    Text("Couldn't talk to the mouse").font(.title3.weight(.medium))
                     Text(msg).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 default:
-                    Text("Looking for your MT760").font(.title2.weight(.semibold))
+                    Text("Looking for your MT760").font(.title3.weight(.medium))
                     Text("Plug in the 2.4 GHz receiver or the USB cable.").foregroundStyle(.secondary)
                 }
             }
@@ -150,8 +134,8 @@ struct SearchingView: View {
                     .textSelection(.enabled)
                 }
                 .frame(maxWidth: 520)
-                .padding()
-                .glassEffect(.regular, in: .rect(cornerRadius: 18))
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         }
         .padding(40)
@@ -163,8 +147,9 @@ struct ToastView: View {
     var body: some View {
         Group {
             if let t = store.toast {
-                Label(t, systemImage: t.contains("failed") ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                    .padding(.horizontal, 16).padding(.vertical, 10)
+                Text(t)
+                    .font(.callout)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
                     .glassEffect(.regular, in: .capsule)
                     .padding(.bottom, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -178,21 +163,22 @@ struct ToastView: View {
     }
 }
 
-/// Shared card chrome.
-struct GlassCard<Content: View>: View {
+/// A quiet content group: small caption title, faint fill, no glass.
+struct Panel<Content: View>: View {
     var title: String?
-    var symbol: String?
+    var symbol: String?          // kept for call sites; not drawn in the minimal theme
     @ViewBuilder var content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
             if let title {
-                Label(title, systemImage: symbol ?? "circle").font(.headline)
+                Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                    .padding(.leading, 4)
             }
-            content
+            VStack(alignment: .leading, spacing: 12) { content }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quinary, in: .rect(cornerRadius: 14))
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 24))
     }
 }
 
@@ -202,16 +188,15 @@ struct PaneScroll<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.largeTitle.weight(.bold))
-                    if let subtitle { Text(subtitle).foregroundStyle(.secondary) }
+                    Text(title).font(.title2.weight(.semibold))
+                    if let subtitle { Text(subtitle).font(.callout).foregroundStyle(.secondary) }
                 }
-                .padding(.bottom, 4)
                 content
             }
-            .padding(28)
-            .frame(maxWidth: 900, alignment: .leading)
+            .padding(.horizontal, 32).padding(.vertical, 24)
+            .frame(maxWidth: 760, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
@@ -229,7 +214,7 @@ struct CapabilityGate<Content: View>: View {
         if store.capabilities.contains(capability) {
             content
         } else {
-            GlassCard(title: "Not available yet", symbol: "lock.circle") {
+            Panel(title: "Not available yet") {
                 Text("MT Control is connected to the receiver, but reading \(what) isn't supported yet. Rapoo's protocol for it is still being worked out.")
                     .foregroundStyle(.secondary)
             }
