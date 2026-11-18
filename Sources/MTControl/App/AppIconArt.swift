@@ -21,38 +21,12 @@ struct AppIconArt: View {
                 )
                 .frame(width: 824, height: 824)
 
-            ZStack {
-                MouseBodyShape()
-                    .fill(.black.opacity(0.6))
-                    .blur(radius: 26)
-                    .offset(x: 10, y: 28)
-                MouseBodyShape()
-                    .fill(LinearGradient(colors: [Color(white: 0.99), Color(white: 0.78)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                MouseBodyShape()
-                    .fill(RadialGradient(colors: [.white.opacity(0.7), .clear], center: UnitPoint(x: 0.4, y: 0.6), startRadius: 0, endRadius: 200))
-                MouseSeams()
-                    .stroke(.black.opacity(0.18), style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                // wheel
-                Capsule()
-                    .fill(Color(white: 0.16))
-                    .frame(width: 36, height: 102)
-                    .position(x: 0.525 * 360, y: 0.175 * 580)
-                Capsule()
-                    .fill(LinearGradient(colors: [Color(red: 0.35, green: 0.62, blue: 1.0), Color(red: 0.0, green: 0.36, blue: 0.95)],
-                                         startPoint: .top, endPoint: .bottom))
-                    .frame(width: 22, height: 84)
-                    .shadow(color: Color(red: 0.2, green: 0.5, blue: 1).opacity(0.8), radius: 12)
-                    .position(x: 0.525 * 360, y: 0.175 * 580)
-                // stage light
-                Circle()
-                    .fill(Color(red: 0.4, green: 0.7, blue: 1))
-                    .frame(width: 14, height: 14)
-                    .shadow(color: Color(red: 0.3, green: 0.6, blue: 1), radius: 10)
-                    .position(x: 0.525 * 360, y: 0.37 * 580)
-            }
-            .frame(width: 360, height: 580)
-            .rotationEffect(.degrees(-14))
-            .offset(y: 6)
+            MouseArt(highlighted: .middle, ledColor: Color(red: 0.35, green: 0.65, blue: 1.0))
+                .tint(Color(red: 0.25, green: 0.55, blue: 1.0))
+                .environment(\.colorScheme, .dark)
+                .frame(width: 470, height: 470 / MouseArt.aspect)
+            .rotationEffect(.degrees(-10))
+            .offset(x: 10, y: 4)
         }
         .frame(width: 1024, height: 1024)
     }
@@ -65,7 +39,7 @@ struct AppIconArt: View {
         let dir = URL(fileURLWithPath: args[i + 1])
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let labels: [Int: String] = [0: "Left click", 2: "Right click", 1: "Gesture button", 5: "Forward",
-                                     6: "Back", 4: "DPI cycle · 1800", 7: "Horizontal scroll"]
+                                     6: "Back", 4: "Middle click", 3: "DPI cycle −", 7: "Horizontal scroll"]
         for scheme in [ColorScheme.light, .dark] {
             let view = MouseDiagram(selected: 1, labels: labels)
                 .frame(width: 640, height: 380)

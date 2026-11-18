@@ -65,3 +65,15 @@ import Testing
     #expect(TelinkCodec.pollingWrite(.hz500, old: [0x01, 0x01, 0xff, 0xff])
             == [0xBA, 0xA5, 0xA5, 0x04, 0x30, 0x06, 0x00, 0x00, 0x02, 0x02, 0xff, 0xff])
 }
+
+@Test func decodesRealButtonMap() {
+    // 0x600–0x62B as read from the MT760L (matches A HUB's Remap page).
+    let raw: [UInt8] = [3,0,1,0, 3,0,4,0, 3,0,2,0, 8,0,4,0, 3,0,4,0, 3,0,0x10,0, 3,0,8,0,
+                        0x0c,0,1,0, 0x0c,0,2,0, 0x0b,0,1,0, 0x0b,0,2,0]
+    let m = TelinkCodec.parseButtonMap(raw)
+    #expect(m[0] == "Left click")
+    #expect(m[3] == "DPI cycle −")
+    #expect(m[4] == "Middle click")
+    #expect(m[5] == "Forward" && m[6] == "Back")
+    #expect(m[7] == "Scroll left" && m[10] == "Scroll down")
+}

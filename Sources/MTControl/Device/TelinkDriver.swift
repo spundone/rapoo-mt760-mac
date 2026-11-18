@@ -120,6 +120,54 @@ enum TelinkCodec {
         return writeMemory(pollingAddress, [code, code, old[2], old[3]])
     }
 
+    /// Button slots: 4 bytes per key at 0x600 + 4 × key ID (keys 0–10).
+    static let buttonMapAddress: UInt32 = 0x600
+    static let buttonSlots = 11
+
+    /// Describes one 4-byte button slot. Verified against A HUB on an MT760L:
+    /// top button `03 00 04 00` = middle click, DIY `08 00 04 00` = DPI cycle −.
+    static func describeButtonSlot(_ s: ArraySlice<UInt8>) -> String {
+        let b = Array(s)
+        guard b.count == 4 else { return "Unknown" }
+        switch b[0] {
+        case 0x03:
+            let names = [(0x01, "Left click"), (0x02, "Right click"), (0x04, "Middle click"), (0x08, "Back"), (0x10, "Forward")]
+            let on = names.filter { Int(b[2]) & $0.0 != 0 }.map(\.1)
+            return on.isEmpty ? "Mouse button" : on.joined(separator: " + ")
+        case 0x08:
+            switch b[2] {
+            case 0x03: return "DPI cycle +"
+            case 0x04: return "DPI cycle −"
+            case 0x05: return "DPI +"
+            case 0x06: return "DPI −"
+            default: return "DPI"
+            }
+        case 0x0B: return b[2] == 0x01 ? "Scroll up" : "Scroll down"
+        case 0x0C: return b[2] == 0x01 ? "Scroll left" : "Scroll right"
+        case 0x01: return HIDKey.name(for: b[2])
+        case 0x02: return Modifiers(rawValue: b[2]).symbols + HIDKey.name(for: b[3])
+        case 0x04:
+            let usage = UInt16(b[2]) | UInt16(b[3]) << 8
+            return MediaKey(rawValue: usage)?.title ?? String(format: "Media 0x%03X", usage)
+        case 0x05: return "Macro \(Int(b[2]) + 1)"
+        case 0x07: return "Disabled"
+        case 0x09:
+            switch b[2] { case 0x01: return "Sniper"; case 0x02: return "Fire"; default: return "Macro switch" }
+        case 0x0A:
+            switch b[2] { case 0x00: return "Polling rate switch"; case 0x02: return "Profile cycle"; case 0x03: return "Receiver cycle"; default: return "DIY" }
+        case 0xFF: return "Not set"
+        default: return String(format: "Unknown (%02X %02X %02X %02X)", b[0], b[1], b[2], b[3])
+        }
+    }
+
+    static func parseButtonMap(_ data: [UInt8]) -> [Int: String] {
+        var out: [Int: String] = [:]
+        for k in 0..<min(buttonSlots, data.count / 4) {
+            out[k] = describeButtonSlot(data[(k * 4)..<(k * 4 + 4)])
+        }
+        return out
+    }
+
     static let rateCodes: [UInt8: PollingRate] = [0x08: .hz125, 0x04: .hz250, 0x02: .hz500, 0x01: .hz1000]
 
     /// data[0] = wired rate, data[1] = wireless rate.
@@ -257,6 +305,14 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
             throw DriverError.unreadable("polling rate")
         }
         s.pollingRate = p
+        // Button map (read-only for now). Two reads of 24 bytes; slots 0–10 use 44 of them.
+        let a = TelinkCodec.readMemory(TelinkCodec.buttonMapAddress, length: 24)
+        // 24-byte reads are what the snapshot uses reliably; a 20-byte read at 0x618 never completed.
+        let b = TelinkCodec.readMemory(TelinkCodec.buttonMapAddress + 24, length: 24)
+        if let r1 = try? await transact(a, label: "buttons 600", minLength: 28),
+           let r2 = try? await transact(b, label: "buttons 618", minLength: 28) {
+            s.firmwareButtons = TelinkCodec.parseButtonMap(Array(TelinkCodec.memory(r1)) + Array(TelinkCodec.memory(r2).prefix(20)))
+        }
         return s
     }
 

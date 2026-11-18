@@ -50,6 +50,8 @@ struct MouseSettings: Equatable, Sendable {
     var pollingRate: PollingRate
     var buttons: [Int: ButtonAction]
     var sleepMinutes: Int
+    /// What each button does inside the mouse, by firmware key ID (read from 0x600).
+    var firmwareButtons: [Int: String] = [:]
 
     static let factory = MouseSettings(
         dpiLevels: [800, 1000, 1200, 1600, 2400, 3200, 4000],
@@ -57,7 +59,9 @@ struct MouseSettings: Equatable, Sendable {
         currentStage: 2,
         pollingRate: .hz1000,
         buttons: Dictionary(uniqueKeysWithValues: PhysicalButton.mt760.map { ($0.id, $0.defaultAction) }),
-        sleepMinutes: 10)
+        sleepMinutes: 10,
+        firmwareButtons: [0: "Left click", 1: "Middle click", 2: "Right click", 3: "DPI cycle −", 4: "Middle click",
+                          5: "Forward", 6: "Back", 7: "Scroll left", 8: "Scroll right"])
 }
 
 /// Capability flags so the UI hides what a given connection cannot do.

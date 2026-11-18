@@ -247,3 +247,10 @@ This settles the conflict in section 0: chip type 7 *is* used, with report ID `0
     sent `… 18 00 24 00 30 00 …` and read back identical. The second table at 0x64C was not touched.
   - Polling: write 4 @ 0x630 `[code, code, old2, old3]`. `08 08` (125 Hz) and `01 01` (1000 Hz) both read back.
   - After a write the mouse can briefly answer memory reads with a bare `01`. Retry until the full reply arrives.
+- **Button map (read, verified):** 4 bytes per key at 0x600 + 4 × key ID. On the user's MT760L:
+  `03 00 01` left, `03 00 04` wheel click (middle), `03 00 02` right, `08 00 04` bottom DIY = DPI cycle −,
+  `03 00 04` top = middle click, `03 00 10` forward, `03 00 08` back, `0c 00 01/02` thumb wheel left/right,
+  `0b 00 01/02` wheel up/down. This matches A HUB's Remap page exactly. Type 03 bit mask: 01 left,
+  02 right, 04 middle, 08 back, 10 forward. Type 08 codes: 03 cycle+, 04 cycle−, 05 DPI+, 06 DPI−.
+- A 20-byte memory read at 0x618 never completed (busy forever), while 8- and 24-byte reads work.
+  Read 24 bytes and ignore the extra.

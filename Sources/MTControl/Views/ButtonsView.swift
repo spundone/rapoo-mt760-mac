@@ -29,12 +29,8 @@ struct ButtonsView: View {
                                       action: binding(for: b), allowDefaultLabel: scope == nil ? "Default" : "Same as All apps")
                                 .onTapGesture { selected = b }
                         }
-                        HStack {
-                            Text("Top button").foregroundStyle(.secondary)
-                            Spacer()
-                            Text("DPI cycle (set on the mouse)").foregroundStyle(.tertiary)
-                        }
-                        .font(.callout)
+                        FirmwareButtonNote(part: .top, firmware: store.settings.firmwareButtons[4])
+                        FirmwareButtonNote(part: .bottom, firmware: store.settings.firmwareButtons[3])
                     }
 
                     if usesGesture {
@@ -271,24 +267,58 @@ struct ShortcutRecorder: View {
 }
 
 /// Callout text for the mouse illustration: what each part does right now.
+/// Starts from the mouse's own button map, then shows Mac-side remaps on top.
 @MainActor
 func diagramLabels(store: MouseStore, host: HostController, app: String?) -> [Int: String] {
-    func text(_ b: HostButton, _ fallback: String) -> String {
+    let fw = store.settings.firmwareButtons
+    func mac(_ b: HostButton) -> String? {
         let a = host.settings.action(for: b, app: app)
-        return a == .passthrough ? fallback : a.title
+        return a == .passthrough ? nil : a.title
     }
-    var l: [Int: String] = [
-        MousePart.left.rawValue: "Left click",
-        MousePart.right.rawValue: "Right click",
-        MousePart.middle.rawValue: text(.middle, "Middle click"),
-        MousePart.forward.rawValue: text(.forward, "Forward"),
-        MousePart.back.rawValue: text(.back, "Back"),
-        MousePart.thumbWheel.rawValue: "Horizontal scroll",
-    ]
-    if store.capabilities.contains(.dpi), let dpi = store.settings.dpiLevels[safe: store.settings.currentStage] {
-        l[MousePart.dpi.rawValue] = "DPI cycle · \(dpi)"
-    } else {
-        l[MousePart.dpi.rawValue] = "DPI cycle"
+    /// A firmware mouse button is what the Mac sees, so Mac remaps of it apply.
+    func resolved(_ firmware: String?) -> String? {
+        switch firmware {
+        case "Middle click": mac(.middle) ?? firmware
+        case "Back": mac(.back) ?? firmware
+        case "Forward": mac(.forward) ?? firmware
+        default: firmware
+        }
     }
+    var l: [Int: String] = [:]
+    l[MousePart.left.rawValue] = fw[0] ?? "Left click"
+    l[MousePart.right.rawValue] = fw[2] ?? "Right click"
+    l[MousePart.middle.rawValue] = (resolved(fw[1] ?? "Middle click"))
+    l[MousePart.top.rawValue] = (resolved(fw[4]))
+    l[MousePart.forward.rawValue] = (resolved(fw[5] ?? "Forward"))
+    l[MousePart.back.rawValue] = (resolved(fw[6] ?? "Back"))
+    l[MousePart.thumbWheel.rawValue] = "Horizontal scroll"
+    l[MousePart.bottom.rawValue] = fw[3]
     return l
+}
+
+/// A button whose job is set inside the mouse. If it sends a mouse button, the Mac-side
+/// action for that button applies to it too.
+struct FirmwareButtonNote: View {
+    let part: MousePart
+    let firmware: String?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(part.name).foregroundStyle(.secondary)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(firmware ?? "—")
+                Text(note).font(.caption2).foregroundStyle(.tertiary)
+            }
+        }
+        .font(.callout)
+    }
+
+    private var note: String {
+        switch firmware {
+        case "Middle click": "Sends a middle click, so the Wheel click action applies"
+        case "Back", "Forward": "Sends \(firmware!), so that action applies"
+        default: "Set inside the mouse"
+        }
+    }
 }
