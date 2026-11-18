@@ -132,6 +132,25 @@ final class MouseStore {
         perform("Sleep after \(minutes) min") { try await $0.setSleep(minutes: minutes) }
     }
 
+    private var snapshotCount = 0
+
+    /// Read-only: logs the mouse's settings memory so changes can be diffed.
+    func snapshotMemory() {
+        guard let d = driver as? TelinkDriver else { toast = "Snapshots need the real mouse"; return }
+        snapshotCount += 1
+        let n = snapshotCount
+        Task {
+            busy = true
+            defer { busy = false }
+            do {
+                try await d.dumpSettingsMemory(label: "#\(n)")
+                toast = "Snapshot \(n) saved to the log"
+            } catch {
+                toast = "Snapshot failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
     func factoryReset() {
         perform("Restored factory settings") { d in
             try await d.factoryReset()

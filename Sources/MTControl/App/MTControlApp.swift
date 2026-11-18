@@ -19,6 +19,8 @@ struct MTControlApp: App {
             CommandMenu("Mouse") {
                 Button("Refresh") { Task { await store.refresh() } }
                     .keyboardShortcut("r")
+                Button("Snapshot settings memory") { store.snapshotMemory() }
+                    .keyboardShortcut("d", modifiers: [.command, .option])
                 Divider()
                 if store.isDemo {
                     Button("Leave demo") { store.stopDemo() }

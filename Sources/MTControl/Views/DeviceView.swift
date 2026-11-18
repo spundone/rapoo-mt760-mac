@@ -15,6 +15,7 @@ struct DeviceView: View {
                 }
                 HStack {
                     Button("Refresh") { Task { await store.refresh() } }.buttonStyle(.glass)
+                    Button("Snapshot memory") { store.snapshotMemory() }.buttonStyle(.glass)
                     Button("Show HID log") { NSWorkspace.shared.activateFileViewerSelecting([HIDLog.url]) }.buttonStyle(.glass)
                 }
             }

@@ -210,6 +210,19 @@ final class TelinkDriver: MouseDriver, @unchecked Sendable {
         return s
     }
 
+    /// Read-only diagnostic: logs 0x600–0x6FF in 24-byte chunks.
+    func dumpSettingsMemory(label: String) async throws {
+        HIDLog.write("=== memory snapshot: \(label)")
+        var addr: UInt32 = 0x600
+        while addr < 0x700 {
+            let len = UInt8(min(24, 0x700 - addr))
+            let r = try await transact(TelinkCodec.readMemory(addr, length: len), label: String(format: "mem %03X", addr))
+            _ = r
+            addr += UInt32(len)
+        }
+        HIDLog.write("=== end snapshot")
+    }
+
     func setDPI(levels: [Int], enabledStages: Int) async throws { throw DriverError.notSupportedYet("Changing DPI") }
     func setCurrentStage(_ stage: Int) async throws {
         guard (0..<7).contains(stage) else { return }
