@@ -107,10 +107,7 @@ struct SearchingView: View {
     @Environment(MouseStore.self) private var store
     var body: some View {
         VStack(spacing: 22) {
-            Image(systemName: "computermouse")
-                .font(.system(size: 44, weight: .ultraLight))
-                .foregroundStyle(.secondary)
-                .symbolEffect(.breathe)
+            BreathingMouse()
             VStack(spacing: 6) {
                 switch store.phase {
                 case .failed(let msg):
@@ -224,5 +221,18 @@ struct CapabilityGate<Content: View>: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// Dimmed illustration that gently pulses while waiting for the mouse.
+struct BreathingMouse: View {
+    @State private var on = false
+    var body: some View {
+        MouseArt(ledColor: .secondary)
+            .frame(height: 150)
+            .opacity(on ? 0.9 : 0.45)
+            .scaleEffect(on ? 1 : 0.97)
+            .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: on)
+            .onAppear { on = true }
     }
 }

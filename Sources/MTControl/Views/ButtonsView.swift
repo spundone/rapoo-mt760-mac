@@ -16,13 +16,13 @@ struct ButtonsView: View {
             AccessibilityBanner()
             ScopeBar(scope: $scope)
 
-            HStack(alignment: .top, spacing: 28) {
-                MouseDiagram(selected: selected.physicalID) { b in
-                    if let hb = HostButton.allCases.first(where: { $0.physicalID == b.id }) { selected = hb }
-                }
-                .frame(width: 180, height: 270)
+            MouseDiagram(selected: selected.physicalID,
+                         labels: diagramLabels(store: store, host: host, app: scope)) { b in
+                if let hb = HostButton.allCases.first(where: { $0.physicalID == b.id }) { selected = hb }
+            }
+            .frame(height: 340)
 
-                VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 22) {
                     Panel(title: scope.flatMap { host.settings.profile(for: $0)?.name } ?? "All apps") {
                         ForEach(HostButton.allCases) { b in
                             ActionRow(title: b.title, highlighted: selected == b,
@@ -62,7 +62,6 @@ struct ButtonsView: View {
                         }
                     }
                 }
-            }
         }
     }
 
@@ -269,4 +268,27 @@ struct ShortcutRecorder: View {
             if let monitor { NSEvent.removeMonitor(monitor) }
         }
     }
+}
+
+/// Callout text for the mouse illustration: what each part does right now.
+@MainActor
+func diagramLabels(store: MouseStore, host: HostController, app: String?) -> [Int: String] {
+    func text(_ b: HostButton, _ fallback: String) -> String {
+        let a = host.settings.action(for: b, app: app)
+        return a == .passthrough ? fallback : a.title
+    }
+    var l: [Int: String] = [
+        MousePart.left.rawValue: "Left click",
+        MousePart.right.rawValue: "Right click",
+        MousePart.middle.rawValue: text(.middle, "Middle click"),
+        MousePart.forward.rawValue: text(.forward, "Forward"),
+        MousePart.back.rawValue: text(.back, "Back"),
+        MousePart.thumbWheel.rawValue: "Horizontal scroll",
+    ]
+    if store.capabilities.contains(.dpi), let dpi = store.settings.dpiLevels[safe: store.settings.currentStage] {
+        l[MousePart.dpi.rawValue] = "DPI cycle · \(dpi)"
+    } else {
+        l[MousePart.dpi.rawValue] = "DPI cycle"
+    }
+    return l
 }

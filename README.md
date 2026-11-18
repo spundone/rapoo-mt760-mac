@@ -4,6 +4,8 @@ A native macOS app for the Rapoo MT760 / MT760L mouse. It replaces Rapoo's A HUB
 
 Not affiliated with Rapoo.
 
+<p align="center"><img src="docs/diagram-dark.png" width="560" alt="MT Control's mouse illustration with button callouts"></p>
+
 ## What it does
 
 **On the mouse** (saved in the mouse, works on any computer):
@@ -38,7 +40,10 @@ Needs the Xcode Command Line Tools (Xcode itself isn't required).
 ```sh
 ./scripts/bundle.sh     # builds dist/MT Control.app
 ./scripts/test.sh       # runs the tests
+./scripts/make-icon.sh  # re-renders Resources/AppIcon.icns from AppIconArt.swift
 ```
+
+The app icon and the mouse illustration are drawn in SwiftUI code (no vendor artwork).
 
 `bundle.sh` signs with a local identity called "MT Control Local Signing" if your keychain has one, and ad-hoc otherwise. A stable identity keeps the macOS permissions across rebuilds.
 

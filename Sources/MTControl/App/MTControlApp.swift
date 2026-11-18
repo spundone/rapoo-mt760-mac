@@ -8,6 +8,8 @@ struct MTControlApp: App {
     @State private var host: HostController
 
     init() {
+        AppIconArt.renderIconSetIfRequested()
+        AppIconArt.renderArtPreviewIfRequested()
         let s = MouseStore()
         _store = State(initialValue: s)
         _host = State(initialValue: HostController(store: s))
