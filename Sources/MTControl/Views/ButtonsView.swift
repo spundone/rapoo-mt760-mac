@@ -47,7 +47,7 @@ struct ButtonsView: View {
                                 get: { host.settings.apps[idx].dpiStage },
                                 set: { host.settings.apps[idx].dpiStage = $0 })) {
                                 Text("Don't change").tag(Int?.none)
-                                ForEach(0..<store.settings.enabledStages, id: \.self) { i in
+                                ForEach(0..<min(store.settings.enabledStages, store.settings.dpiLevels.count), id: \.self) { i in
                                     Text("Stage \(i + 1) · \(store.settings.dpiLevels[i]) DPI").tag(Int?.some(i))
                                 }
                             }

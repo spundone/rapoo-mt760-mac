@@ -104,8 +104,34 @@ final class MouseStore {
         }
     }
 
+    /// Unsaved DPI edits. Refreshes from the mouse never overwrite these.
+    var dpiDraft: [Int]?
+    var stagesDraft: Int?
+    var hasDPIDraft: Bool {
+        (dpiDraft != nil && dpiDraft! != settings.dpiLevels) || (stagesDraft != nil && stagesDraft! != settings.enabledStages)
+    }
+    var editingLevels: [Int] { dpiDraft ?? settings.dpiLevels }
+    var editingStages: Int { stagesDraft ?? settings.enabledStages }
+
+    func setDraftLevel(_ i: Int, _ value: Int) {
+        var d = editingLevels
+        guard d.indices.contains(i) else { return }
+        d[i] = value
+        dpiDraft = d
+    }
+
+    func discardDPIDraft() {
+        dpiDraft = nil
+        stagesDraft = nil
+    }
+
     func applyDPI() {
-        let levels = settings.dpiLevels, n = settings.enabledStages
+        let range = TelinkCodec.dpiRange
+        let levels = editingLevels.map { min(max($0, range.lowerBound), range.upperBound) }
+        let n = editingStages
+        discardDPIDraft()
+        settings.dpiLevels = levels
+        settings.enabledStages = n
         writeThenVerify(success: "DPI saved", check: { $0.dpiLevels.prefix(n) == levels.prefix(n) && $0.enabledStages == n }) {
             try await $0.setDPI(levels: levels, enabledStages: n)
         }

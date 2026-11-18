@@ -61,7 +61,7 @@ struct MenuBarView: View {
                 Text("DPI stage").font(.caption).foregroundStyle(.secondary)
                 GlassEffectContainer(spacing: 6) {
                     HStack(spacing: 6) {
-                        ForEach(0..<store.settings.enabledStages, id: \.self) { i in
+                        ForEach(0..<min(store.settings.enabledStages, store.settings.dpiLevels.count), id: \.self) { i in
                             Button("\(store.settings.dpiLevels[i])") { store.selectStage(i) }
                                 .buttonStyle(.glass)
                                 .tint(store.settings.currentStage == i ? .accentColor : nil)

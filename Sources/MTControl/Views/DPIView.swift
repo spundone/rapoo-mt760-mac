@@ -7,14 +7,13 @@ struct DPIView: View {
     static let step = TelinkCodec.dpiStep
 
     var body: some View {
-        @Bindable var store = store
         PaneScroll(title: "Sensitivity", subtitle: "Click a stage to switch to it. The button on top of the mouse cycles through them too.") {
           CapabilityGate(capability: .dpi, what: "DPI") {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Stage").font(.subheadline.weight(.medium)).foregroundStyle(.secondary).padding(.leading, 4)
                 GlassEffectContainer(spacing: 8) {
                     HStack(spacing: 8) {
-                        ForEach(0..<store.settings.enabledStages, id: \.self) { i in
+                        ForEach(0..<min(store.settings.enabledStages, store.settings.dpiLevels.count), id: \.self) { i in
                             StageChip(dpi: store.settings.dpiLevels[i], index: i,
                                       active: store.settings.currentStage == i) { store.selectStage(i) }
                                 .glassEffectID(i, in: glassNS)
@@ -26,27 +25,29 @@ struct DPIView: View {
             }
 
             Panel(title: "Stage values") {
-                Stepper("\(store.settings.enabledStages) stages", value: $store.settings.enabledStages, in: 1...store.settings.dpiLevels.count)
-                ForEach(0..<store.settings.enabledStages, id: \.self) { i in
+                Stepper("\(store.editingStages) stages",
+                        value: Binding(get: { store.editingStages }, set: { store.stagesDraft = $0 }),
+                        in: 1...TelinkCodec.maxStages)
+                ForEach(0..<min(store.editingStages, store.editingLevels.count), id: \.self) { i in
                     HStack(spacing: 12) {
                         Text("\(i + 1)").font(.callout.monospacedDigit()).foregroundStyle(.secondary).frame(width: 16)
                         Slider(value: Binding(
-                            get: { Double(store.settings.dpiLevels[i]) },
-                            set: { store.settings.dpiLevels[i] = Int(($0 / Double(Self.step)).rounded()) * Self.step }),
+                            get: { Double(store.editingLevels[safe: i] ?? Self.range.lowerBound) },
+                            set: { store.setDraftLevel(i, Int(($0 / Double(Self.step)).rounded()) * Self.step) }),
                             in: Double(Self.range.lowerBound)...Double(Self.range.upperBound))
-                        Text("\(store.settings.dpiLevels[i])").font(.callout.monospacedDigit()).frame(width: 48, alignment: .trailing)
+                        Text("\(store.editingLevels[safe: i] ?? 0)").font(.callout.monospacedDigit()).frame(width: 48, alignment: .trailing)
                     }
                 }
                 HStack {
-                    Text("50 to 4000 DPI, in steps of 50.").font(.caption).foregroundStyle(.secondary)
+                    Text(store.hasDPIDraft ? "Unsaved changes" : "50 to 4000 DPI, in steps of 50.")
+                        .font(.caption).foregroundStyle(store.hasDPIDraft ? .primary : .secondary)
                     Spacer()
-                    Button("Revert") { Task { await store.refresh() } }
+                    Button("Revert") { store.discardDPIDraft() }
                         .buttonStyle(.glass)
-                    Button("Save to mouse") {
-                        store.settings.dpiLevels = store.settings.dpiLevels.map { min(max($0, Self.range.lowerBound), Self.range.upperBound) }
-                        store.applyDPI()
-                    }
-                    .buttonStyle(.glassProminent)
+                        .disabled(!store.hasDPIDraft)
+                    Button("Save to mouse") { store.applyDPI() }
+                        .buttonStyle(.glassProminent)
+                        .disabled(!store.hasDPIDraft || store.busy)
                 }
             }
             .disabled(!store.writable.contains(.dpi))
