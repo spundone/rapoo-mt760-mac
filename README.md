@@ -40,10 +40,23 @@ It's an unofficial app, made by a user. Rapoo isn't involved.
 
 1. Download `MT-Control.zip` from the [latest release](https://github.com/spundone/rapoo-mt760-mac/releases/latest) and double-click it to unzip.
 2. Drag **MT Control** into your **Applications** folder.
-3. Open it. The app isn't notarised by Apple (that costs $99 a year), so the first time macOS will say it can't check it:
+3. Open it. The first time, macOS will say it couldn't verify the app (see [why below](#about-the-apple-could-not-verify-warning)):
    - Click **Done** (or **OK**).
    - Open **System Settings → Privacy & Security**, scroll down to the message about MT Control, and click **Open Anyway**.
    - Enter your password if asked. After this, it opens normally.
+
+### About the "Apple could not verify" warning
+
+MT Control is **not notarised**. Notarisation means a developer pays Apple $99 a year for a Developer ID, and Apple scans each release before it's published. Mac apps from outside the App Store that skip this get a warning the first time you open them. That includes plenty of open-source apps.
+
+What this means for you:
+- **The warning is expected.** It doesn't mean macOS found anything wrong with the app. It means Apple hasn't scanned it.
+- **You only see it once.** After you click **Open Anyway**, macOS remembers your choice for that copy of the app. You'll see the warning again after installing an update.
+- **You can check the download yourself.** Each release lists a SHA-256 checksum. In Terminal, in the folder with the download, run `shasum -a 256 -c SHA256SUMS`. It should print `MT-Control.zip: OK`.
+- **You can build it yourself.** All the source code is here; see [For developers](#for-developers). A copy you build on your own Mac doesn't show the warning.
+- **No admin tricks needed.** You don't have to turn off Gatekeeper or run Terminal commands. **Open Anyway** is enough.
+
+If enough people use the app, a notarised version may follow.
 
 ## The first time you open it
 
@@ -62,6 +75,9 @@ If the mouse doesn't show up, move it to wake it up. MT Control keeps trying eve
 
 **Do I still need Rapoo's A HUB?**
 No. Close A HUB while using MT Control, because both apps talk to the mouse through the same channel.
+
+**Why does macOS warn me when I open it?**
+The app isn't notarised by Apple. See [About the "Apple could not verify" warning](#about-the-apple-could-not-verify-warning).
 
 **Is it safe for my mouse?**
 MT Control only changes the same settings A HUB does, using the same commands. After every change it reads the setting back from the mouse to check it worked. It never lets you change the left button, so you can't end up without a left click. It doesn't update firmware.
